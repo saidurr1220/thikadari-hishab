@@ -72,7 +72,6 @@ export default function PurchasesPage({
   });
 
   useEffect(() => {
-    console.log("useEffect running with tenderId:", params.tenderId);
     if (params.tenderId) {
       loadData();
     }
@@ -88,7 +87,6 @@ export default function PurchasesPage({
       .select("*")
       .eq("tender_id", params.tenderId);
 
-    console.log("Vendors loaded:", vendorData?.length || 0, vendorData);
     if (vendorError) console.error("Vendor error:", vendorError);
 
     // Load vendor purchases
@@ -103,8 +101,6 @@ export default function PurchasesPage({
       .eq("tender_id", params.tenderId)
       .order("purchase_date", { ascending: false });
 
-    console.log("Vendor purchases:", vendorPurchases?.length || 0);
-    console.log("Sample vendor purchase:", vendorPurchases?.[0]);
     if (vpError) console.error("VP error:", vpError);
 
     // Load material purchases
@@ -119,7 +115,6 @@ export default function PurchasesPage({
       .eq("tender_id", params.tenderId)
       .order("purchase_date", { ascending: false });
 
-    console.log("Material purchases:", materialPurchases?.length || 0);
     if (mpError) console.error("MP error:", mpError);
 
     // Load vendor payments
@@ -128,7 +123,6 @@ export default function PurchasesPage({
       .select("*")
       .eq("tender_id", params.tenderId);
 
-    console.log("Payments:", payments?.length || 0);
     if (payError) console.error("Payment error:", payError);
 
     // Process vendors
@@ -151,11 +145,6 @@ export default function PurchasesPage({
     vendorPurchases?.forEach((vp: any) => {
       if (!vendorMap.has(vp.vendor_id) && vp.vendor) {
         // Create vendor from purchase data if not in vendors table
-        console.log(
-          "Creating vendor from purchase:",
-          vp.vendor.name,
-          vp.vendor_id
-        );
         vendorMap.set(vp.vendor_id, {
           id: vp.vendor_id,
           name: vp.vendor.name || "Unknown Vendor",
@@ -172,9 +161,6 @@ export default function PurchasesPage({
       const vendor = vendorMap.get(vp.vendor_id);
       if (vendor) {
         const amount = Number(vp.total_cost || 0);
-        console.log(
-          `Adding purchase to ${vendor.name}: ${amount} (before: ${vendor.total_purchases})`
-        );
         vendor.total_purchases += amount;
         vendor.purchase_count += 1;
         if (
@@ -183,8 +169,6 @@ export default function PurchasesPage({
         ) {
           vendor.last_purchase_date = vp.purchase_date;
         }
-      } else {
-        console.log("Vendor not found for purchase:", vp.vendor_id, vp);
       }
     });
 
@@ -214,7 +198,6 @@ export default function PurchasesPage({
         const vendor = vendorMap.get(mp.vendor_id);
         if (vendor) {
           const amount = Number(mp.total_amount || 0);
-          console.log(`Adding material purchase to ${vendor.name}: ${amount}`);
           vendor.total_purchases += amount;
           vendor.purchase_count += 1;
           if (
@@ -232,12 +215,7 @@ export default function PurchasesPage({
       const vendor = vendorMap.get(p.vendor_id);
       if (vendor) {
         const amount = Number(p.amount || 0);
-        console.log(
-          `Adding payment to ${vendor.name}: ${amount} (before: ${vendor.total_paid})`
-        );
         vendor.total_paid += amount;
-      } else {
-        console.log("Vendor not found for payment:", p.vendor_id, p);
       }
     });
 
@@ -327,18 +305,6 @@ export default function PurchasesPage({
     );
 
     const vendorList = Array.from(vendorMap.values());
-    console.log("Final vendors:", vendorList.length, vendorList);
-    vendorList.forEach((v) => {
-      console.log(
-        `Vendor ${v.name}: purchases=${v.total_purchases}, paid=${v.total_paid}, due=${v.due_amount}, count=${v.purchase_count}`
-      );
-    });
-    console.log("Final purchases:", allPurchases.length);
-    console.log("Stats:", {
-      totalPurchases,
-      totalPaid: totalPurchases - totalDue,
-      totalDue,
-    });
 
     setVendors(vendorList);
     setPurchases(allPurchases);

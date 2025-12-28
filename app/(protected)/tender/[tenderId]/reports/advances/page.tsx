@@ -41,7 +41,6 @@ export default function AdvancesRegisterPage({
     if (balancesError) {
       console.error("Error loading balances:", balancesError);
     }
-    console.log("Balances data:", balancesData);
     setBalances(balancesData || []);
 
     setLoading(false);

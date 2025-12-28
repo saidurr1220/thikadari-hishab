@@ -46,9 +46,10 @@ export default function AddPurchasePage({
     transportCost: "",
     unloadCost: "",
     totalAmount: "",
-    paymentMethod: "cash" as "cash" | "bank" | "due",
+    paymentMethod: "cash" as "cash" | "bank" | "due" | "mfs",
     paymentRef: "",
     notes: "",
+    mfsCharge: false,
   });
 
   useEffect(() => {
@@ -227,6 +228,13 @@ export default function AddPurchasePage({
         }
       }
 
+      // Calculate final amount with MFS charge if applicable
+      let finalAmount = parseFloat(formData.totalAmount);
+      if (formData.paymentMethod === "mfs" && formData.mfsCharge) {
+        const mfsCharge = finalAmount * 0.0185 + 10; // 1.85% + ৳10
+        finalAmount = parseFloat((finalAmount + mfsCharge).toFixed(2));
+      }
+
       if (purchaseType === "material") {
         // Create material purchase
         const { error: purchaseError, data: purchaseData } = await supabase
@@ -260,24 +268,27 @@ export default function AddPurchasePage({
 
         if (purchaseError) throw purchaseError;
 
-        // Auto-create payment if vendor exists and payment method is cash or bank
+        // Auto-create payment if vendor exists and payment method is cash, bank, or mfs
         if (
           vendorId &&
           (formData.paymentMethod === "cash" ||
-            formData.paymentMethod === "bank")
+            formData.paymentMethod === "bank" ||
+            formData.paymentMethod === "mfs")
         ) {
+          const paymentNotes = formData.paymentMethod === "mfs" && formData.mfsCharge
+            ? `Auto payment for material: ${formData.customItemName || "Material purchase"} (incl. MFS charge)`
+            : `Auto payment for material: ${formData.customItemName || "Material purchase"}`;
+
           const { error: paymentError } = await supabase
             .from("vendor_payments")
             .insert({
               tender_id: params.tenderId,
               vendor_id: vendorId,
               payment_date: formData.purchaseDate,
-              amount: parseFloat(formData.totalAmount),
+              amount: finalAmount,
               payment_method: formData.paymentMethod,
               payment_ref: formData.paymentRef || null,
-              notes: `Auto payment for material: ${
-                formData.customItemName || "Material purchase"
-              }`,
+              notes: paymentNotes,
               created_by: auth.user.id,
             });
 
@@ -314,21 +325,26 @@ export default function AddPurchasePage({
 
         if (purchaseError) throw purchaseError;
 
-        // Auto-create payment if payment method is cash or bank
+        // Auto-create payment if payment method is cash, bank, or mfs
         if (
           formData.paymentMethod === "cash" ||
-          formData.paymentMethod === "bank"
+          formData.paymentMethod === "bank" ||
+          formData.paymentMethod === "mfs"
         ) {
+          const paymentNotes = formData.paymentMethod === "mfs" && formData.mfsCharge
+            ? `Auto payment for purchase: ${formData.customItemName} (incl. MFS charge)`
+            : `Auto payment for purchase: ${formData.customItemName}`;
+
           const { error: paymentError } = await supabase
             .from("vendor_payments")
             .insert({
               tender_id: params.tenderId,
               vendor_id: vendorId,
               payment_date: formData.purchaseDate,
-              amount: parseFloat(formData.totalAmount),
+              amount: finalAmount,
               payment_method: formData.paymentMethod,
               payment_ref: formData.paymentRef || null,
-              notes: `Auto payment for purchase: ${formData.customItemName}`,
+              notes: paymentNotes,
               created_by: auth.user.id,
             });
 
@@ -715,13 +731,62 @@ export default function AddPurchasePage({
                     id="paymentMethod"
                     name="paymentMethod"
                     value={formData.paymentMethod}
-                    onChange={handleChange}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormData((prev) => ({
+                        ...prev,
+                        paymentMethod: value as "cash" | "bank" | "due" | "mfs",
+                        mfsCharge: value === "mfs" ? prev.mfsCharge : false,
+                      }));
+                    }}
                     className="w-full px-3 py-2 border rounded-md"
                   >
                     <option value="cash">Cash</option>
                     <option value="bank">Bank Transfer</option>
+                    <option value="mfs">MFS (bKash, Nagad)</option>
                     <option value="due">Due/Credit</option>
                   </select>
+                  {formData.paymentMethod === "mfs" && formData.paymentMethod !== "due" && (
+                    <div className="mt-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="mfsCharge"
+                          checked={formData.mfsCharge}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              mfsCharge: e.target.checked,
+                            }))
+                          }
+                          className="rounded"
+                        />
+                        <label htmlFor="mfsCharge" className="text-sm text-slate-700">
+                          Add MFS charge to total (1.85% + ৳10)
+                        </label>
+                      </div>
+                      {formData.mfsCharge && formData.totalAmount && (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm">
+                          <div className="flex justify-between mb-1">
+                            <span className="text-slate-600">Base Amount:</span>
+                            <span className="font-medium">৳{parseFloat(formData.totalAmount).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between mb-1">
+                            <span className="text-slate-600">MFS Charge (1.85%):</span>
+                            <span className="font-medium">৳{(parseFloat(formData.totalAmount) * 0.0185).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between mb-1">
+                            <span className="text-slate-600">Transaction Fee:</span>
+                            <span className="font-medium">৳10.00</span>
+                          </div>
+                          <div className="flex justify-between pt-2 border-t border-yellow-300">
+                            <span className="font-semibold text-slate-800">Final Total:</span>
+                            <span className="font-bold text-lg text-green-700">৳{(parseFloat(formData.totalAmount) * 1.0185 + 10).toFixed(2)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="paymentRef">Payment Reference</Label>

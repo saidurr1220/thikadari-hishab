@@ -16,6 +16,7 @@ import {
   DollarSign,
   Edit,
   Trash2,
+  Printer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +45,8 @@ export default function VendorDetailPage({
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [vendor, setVendor] = useState<any>(null);
+  const [tender, setTender] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [stats, setStats] = useState({
     totalPurchases: 0,
@@ -69,6 +72,7 @@ export default function VendorDetailPage({
     paymentMethod: "cash",
     reference: "",
     notes: "",
+    mfsCharge: false,
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -90,6 +94,26 @@ export default function VendorDetailPage({
   const loadData = async () => {
     setLoading(true);
     const supabase = createClient();
+
+    // Load current user
+    const { data: authData } = await supabase.auth.getUser();
+    if (authData.user) {
+      const { data: userData } = await supabase
+        .from("users")
+        .select("full_name, email")
+        .eq("id", authData.user.id)
+        .single();
+      setCurrentUser(userData);
+    }
+
+    // Load tender details
+    const { data: tenderData } = await supabase
+      .from("tenders")
+      .select("*")
+      .eq("id", params.tenderId)
+      .single();
+    
+    setTender(tenderData);
 
     // Load vendor details
     const { data: vendorData } = await supabase
@@ -220,14 +244,30 @@ export default function VendorDetailPage({
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) throw new Error("Not authenticated");
 
+      // Calculate amount with MFS charge if applicable
+      let finalAmount = Number(parseFloat(paymentData.amount).toFixed(2));
+      let paymentNotes = paymentData.notes || "";
+      
+      if (paymentData.paymentMethod === "mfs" && paymentData.mfsCharge) {
+        const percentageCharge = finalAmount * 0.0185; // 1.85% charge
+        const totalCharge = percentageCharge + 10; // + ৳10 fee
+        finalAmount = Number((finalAmount + totalCharge).toFixed(2));
+        
+        if (paymentNotes) {
+          paymentNotes += " (incl. MFS charge)";
+        } else {
+          paymentNotes = "MFS payment with charge included";
+        }
+      }
+
       const { error } = await supabase.from("vendor_payments").insert({
         tender_id: params.tenderId,
         vendor_id: params.vendorId,
         payment_date: paymentData.paymentDate,
-        amount: Number(parseFloat(paymentData.amount).toFixed(2)),
+        amount: finalAmount,
         payment_method: paymentData.paymentMethod,
         reference: paymentData.reference || null,
-        notes: paymentData.notes || null,
+        notes: paymentNotes || null,
         recorded_by: auth.user.id,
       });
 
@@ -240,6 +280,7 @@ export default function VendorDetailPage({
         paymentMethod: "cash",
         reference: "",
         notes: "",
+        mfsCharge: false,
       });
       loadData();
     } catch (err: any) {
@@ -435,15 +476,77 @@ export default function VendorDetailPage({
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
       <div className="max-w-7xl mx-auto px-4 py-8 lg:pl-8 pl-20">
+        {/* Print Header - Only visible in print */}
+        <div className="print-header">
+          {/* Company Name & Address */}
+          <div style={{ textAlign: 'center', marginBottom: '12px' }}>
+            <div style={{ fontSize: '18pt', fontWeight: 'bold', marginBottom: '4px' }}>
+              মেসার্স সোনালী ট্রেডার্স
+            </div>
+            <div style={{ fontSize: '9pt', color: '#333' }}>
+              মুরাদনগর, কুমিল্লা।
+            </div>
+          </div>
+
+          {/* Title */}
+          <div style={{ textAlign: 'center', borderTop: '2px solid #000', borderBottom: '2px solid #000', padding: '6px 0', marginBottom: '12px' }}>
+            <div style={{ fontSize: '14pt', fontWeight: 'bold' }}>
+              ভেন্ডার লেনদেন বিবরণী
+            </div>
+          </div>
+
+          {/* Tender & Date Info */}
+          <div style={{ marginBottom: '12px', fontSize: '10pt' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <div>
+                <strong>টেন্ডার আইডি:</strong> {tender?.id?.slice(0, 8).toUpperCase()}
+              </div>
+              <div>
+                <strong>তারিখ:</strong> {formatDate(new Date().toISOString().split("T")[0])}
+              </div>
+            </div>
+            <div>
+              <strong>কাজের নাম:</strong> {tender?.project_name}
+            </div>
+          </div>
+
+          {/* Vendor Info Box */}
+          <div style={{ border: '2px solid #000', padding: '8px', marginBottom: '12px', fontSize: '10pt' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <div style={{ flex: 1 }}>
+                <strong>ভেন্ডার নাম:</strong> {vendor?.name}
+              </div>
+              <div style={{ flex: 1, textAlign: 'right' }}>
+                <strong>ফোন:</strong> {vendor?.phone || "—"}
+              </div>
+            </div>
+            <div style={{ borderTop: '1px solid #999', paddingTop: '6px', marginTop: '6px', display: 'flex', justifyContent: 'space-between' }}>
+              <div><strong>মোট লেনদেন:</strong></div>
+              <div style={{ fontSize: '12pt', fontWeight: 'bold' }}>{formatCurrency(stats.totalPurchases)}</div>
+            </div>
+          </div>
+        </div>
+
         {/* Header */}
         <div className="mb-8">
-          <Link
-            href={`/tender/${params.tenderId}/purchases`}
-            className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 mb-4"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to purchases
-          </Link>
+          <div className="flex items-center justify-between mb-4 no-print">
+            <Link
+              href={`/tender/${params.tenderId}/purchases`}
+              className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to purchases
+            </Link>
+            
+            <Button
+              onClick={() => window.print()}
+              variant="outline"
+              className="gap-2"
+            >
+              <Printer className="h-4 w-4" />
+              Print Statement
+            </Button>
+          </div>
 
           <div className="flex items-start justify-between">
             <div>
@@ -475,7 +578,7 @@ export default function VendorDetailPage({
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 no-print">
               <Button
                 onClick={handleEditVendor}
                 variant="outline"
@@ -508,7 +611,7 @@ export default function VendorDetailPage({
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 no-print">
           <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium opacity-90 flex items-center gap-2">
@@ -748,6 +851,26 @@ export default function VendorDetailPage({
                       placeholder="0.00"
                       required
                     />
+                    {paymentData.paymentMethod === "mfs" && paymentData.mfsCharge && paymentData.amount && (
+                      <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded p-3 text-sm">
+                        <div className="flex justify-between mb-1">
+                          <span className="text-slate-600">Base Amount:</span>
+                          <span className="font-medium">৳{Number(paymentData.amount).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between mb-1">
+                          <span className="text-slate-600">MFS Charge (1.85%):</span>
+                          <span className="font-medium">৳{(Number(paymentData.amount) * 0.0185).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between mb-1">
+                          <span className="text-slate-600">Transaction Fee:</span>
+                          <span className="font-medium">৳10.00</span>
+                        </div>
+                        <div className="flex justify-between pt-2 border-t border-yellow-300">
+                          <span className="font-semibold text-slate-800">Final Total:</span>
+                          <span className="font-bold text-lg text-green-700">৳{(Number(paymentData.amount) * 1.0185 + 10).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -761,6 +884,7 @@ export default function VendorDetailPage({
                         setPaymentData({
                           ...paymentData,
                           paymentMethod: e.target.value,
+                          mfsCharge: e.target.value === "mfs" ? paymentData.mfsCharge : false,
                         })
                       }
                       className="w-full px-3 py-2 border rounded-md"
@@ -770,6 +894,25 @@ export default function VendorDetailPage({
                       <option value="check">Check</option>
                       <option value="mfs">MFS (bKash, Nagad)</option>
                     </select>
+                    {paymentData.paymentMethod === "mfs" && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="mfsCharge"
+                          checked={paymentData.mfsCharge}
+                          onChange={(e) =>
+                            setPaymentData({
+                              ...paymentData,
+                              mfsCharge: e.target.checked,
+                            })
+                          }
+                          className="rounded"
+                        />
+                        <label htmlFor="mfsCharge" className="text-sm text-slate-700">
+                          Add MFS charge (1.85% + ৳10)
+                        </label>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="reference">Reference/TxID</Label>
@@ -836,25 +979,31 @@ export default function VendorDetailPage({
               <table className="w-full">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase">
-                      Date
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                      <span className="no-print">Date</span>
+                      <span className="print-only" style={{ display: 'none' }}>তারিখ</span>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase">
-                      Type
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                      <span className="no-print">Status</span>
+                      <span className="print-only" style={{ display: 'none' }}>পেমেন্ট</span>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase">
-                      Details
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                      <span className="no-print">Details</span>
+                      <span className="print-only" style={{ display: 'none' }}>বিবরণ</span>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase">
-                      Quantity
+                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                      <span className="no-print">Qty</span>
+                      <span className="print-only" style={{ display: 'none' }}>পরিমাণ</span>
                     </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-600 uppercase">
-                      Amount
+                    <th className="px-3 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                      <span className="no-print">Amount</span>
+                      <span className="print-only" style={{ display: 'none' }}>টাকা</span>
                     </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-600 uppercase">
-                      Balance
+                    <th className="px-3 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                      <span className="no-print">Balance</span>
+                      <span className="print-only" style={{ display: 'none' }}>বাকি</span>
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-slate-600 uppercase">
+                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wide no-print">
                       Action
                     </th>
                   </tr>
@@ -889,23 +1038,34 @@ export default function VendorDetailPage({
 
                         return (
                           <tr key={txn.id} className="hover:bg-slate-50">
-                            <td className="px-4 py-3 text-sm text-slate-900">
+                            <td className="px-3 py-3 text-sm text-slate-900">
                               {formatDate(txn.date)}
                             </td>
-                            <td className="px-4 py-3">
-                              <span
-                                className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                                  txn.type === "purchase"
-                                    ? "bg-blue-100 text-blue-800"
-                                    : "bg-green-100 text-green-800"
-                                }`}
-                              >
-                                {txn.type === "purchase"
-                                  ? "Purchase"
-                                  : "Payment"}
-                              </span>
+                            <td className="px-3 py-3">
+                              {txn.type === "purchase" ? (
+                                txn.payment_method === "cash" || txn.payment_method === "bank" || txn.payment_method === "mfs" ? (
+                                  <div className="text-xs">
+                                    <span className="inline-flex px-2 py-1 bg-green-100 text-green-800 rounded-full font-medium">
+                                      <span className="no-print">Paid via {txn.payment_method === "mfs" ? "MFS" : txn.payment_method === "cash" ? "Cash" : "Bank"}</span>
+                                    </span>
+                                    <span className="print-only" style={{ display: 'none' }}>{txn.payment_method === "mfs" ? "এমএফএস দিয়ে প্রদত্ত" : txn.payment_method === "cash" ? "ক্যাশ দিয়ে প্রদত্ত" : "ব্যাংক দিয়ে প্রদত্ত"}</span>
+                                  </div>
+                                ) : (
+                                  <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+                                    <span className="no-print">Due</span>
+                                    <span className="print-only" style={{ display: 'none' }}>বকেয়া বিল</span>
+                                  </span>
+                                )
+                              ) : (
+                                <div className="text-xs">
+                                  <span className="inline-flex px-2 py-1 bg-blue-100 text-blue-800 rounded-full font-medium">
+                                    <span className="no-print">Payment via {txn.payment_method === "mfs" ? "MFS" : txn.payment_method === "cash" ? "Cash" : txn.payment_method === "bank" ? "Bank" : txn.payment_method === "check" ? "Check" : "Other"}</span>
+                                  </span>
+                                  <span className="print-only" style={{ display: 'none' }}>{txn.payment_method === "mfs" ? "এমএফএস পেমেন্ট" : txn.payment_method === "cash" ? "ক্যাশ পেমেন্ট" : txn.payment_method === "bank" ? "ব্যাংক পেমেন্ট" : "চেক পেমেন্ট"}</span>
+                                </div>
+                              )}
                             </td>
-                            <td className="px-4 py-3 text-sm text-slate-900">
+                            <td className="px-3 py-3 text-sm text-slate-900">
                               {txn.item_name || "-"}
                               {txn.notes && (
                                 <p className="text-xs text-slate-500 mt-1">
@@ -913,7 +1073,7 @@ export default function VendorDetailPage({
                                 </p>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-sm text-slate-600">
+                            <td className="px-3 py-3 text-sm text-slate-600 text-center">
                               {txn.quantity
                                 ? `${txn.quantity} ${txn.unit}`
                                 : "-"}
@@ -945,7 +1105,7 @@ export default function VendorDetailPage({
                                 : ""}
                             </td>
                             <td className="px-4 py-3 text-center">
-                              <div className="flex items-center justify-center gap-1">
+                              <div className="flex items-center  no-printjustify-center gap-1">
                                 {txn.type === "purchase" && (
                                   <Button
                                     size="sm"
@@ -976,7 +1136,416 @@ export default function VendorDetailPage({
             </div>
           </CardContent>
         </Card>
+
+        {/* Print Footer - Only visible in print */}
+        <div className="print-footer">
+          <div style={{ marginTop: '20px', paddingTop: '12px', borderTop: '1px solid #ccc', fontSize: '9pt', color: '#666' }}>
+            <div>
+              <strong>Generated by:</strong> {currentUser?.full_name || currentUser?.email || "User"}
+            </div>
+            <div>
+              <strong>Generated on:</strong> {formatDate(new Date().toISOString().split("T")[0])} at {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </div>
+          </div>
+        </div>
       </div>
+
+      <style jsx global>{`
+        /* Hide print elements on screen */
+        .print-header,
+        .print-footer {
+          display: none;
+        }
+
+        @media print {
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
+          @page {
+            size: A4 portrait;
+            margin: 15mm 12mm;
+          }
+
+          body {
+            background: white !important;
+            font-size: 10pt !important;
+            font-family: 'Noto Sans Bengali', 'SolaimanLipi', Arial, sans-serif !important;
+            color: #000 !important;
+            line-height: 1.4 !important;
+          }
+
+          /* Hide everything except content */
+          aside, nav, header, footer,
+          .sidebar, [class*="sidebar"],
+          .no-print,
+          button, svg {
+            display: none !important;
+          }
+
+          /* Show print elements */
+          .print-header,
+          .print-footer {
+            display: block !important;
+          }
+
+          main {
+            overflow: visible !important;
+          }
+
+          .min-h-screen {
+            min-height: auto !important;
+          }
+
+          .bg-gradient-to-br {
+            background: white !important;
+          }
+
+          .lg\\:pl-8,
+          .pl-20 {
+            padding-left: 0 !important;
+          }
+
+          .px-4 {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+          }
+
+          .py-8 {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+          }
+
+          /* Show print header */
+          .print-only {
+            display: block !important;
+          }
+
+          /* Show print-only elements */
+          .print-only {
+            display: inline !important;
+          }
+
+          th .print-only {
+            display: inline !important;
+          }
+
+          /* Show Bengali in badges for print */
+          .rounded-full .print-only {
+            display: inline !important;
+          }
+
+          /* Clean header styling */
+          .print-only h1 {
+            font-size: 18pt !important;
+            font-weight: 700 !important;
+            color: #000 !important;
+            margin: 0 0 0.2rem 0 !important;
+          }
+
+          .print-only h2 {
+            font-size: 14pt !important;
+            font-weight: 700 !important;
+            color: #000 !important;
+            margin: 0 !important;
+            padding: 0.3rem 0 !important;
+          }
+
+          .print-only p {
+            font-size: 9pt !important;
+            margin: 0 !important;
+            color: #333 !important;
+          }
+
+          .print-only .text-xs {
+            font-size: 9pt !important;
+          }
+
+          .print-only .text-sm {
+            font-size: 10pt !important;
+          }
+
+          .print-only .text-lg {
+            font-size: 13pt !important;
+          }
+
+          .print-only table {
+            border: none !important;
+            margin: 0 !important;
+          }
+
+          .print-only table td {
+            padding: 0.15rem 0.3rem !important;
+            border: none !important;
+            font-size: 10pt !important;
+            color: #000 !important;
+          }
+
+          .print-only table td strong {
+            font-weight: 600 !important;
+          }
+
+          .print-only .border-y-2 {
+            border-top: 2px solid #000 !important;
+            border-bottom: 2px solid #000 !important;
+          }
+
+          .print-only .border-2 {
+            border: 2px solid #000 !important;
+          }
+
+          .print-only .border-black {
+            border-color: #000 !important;
+          }
+
+          .print-only .p-3 {
+            padding: 0.4rem !important;
+          }
+
+          .print-only .mb-4 {
+            margin-bottom: 0.5rem !important;
+          }
+
+          .print-only .mb-3 {
+            margin-bottom: 0.3rem !important;
+          }
+
+          .print-only .mb-1 {
+            margin-bottom: 0.1rem !important;
+          }
+
+          .print-only .py-1 {
+            padding-top: 0.15rem !important;
+            padding-bottom: 0.15rem !important;
+          }
+
+          .print-only .py-2 {
+            padding-top: 0.3rem !important;
+            padding-bottom: 0.3rem !important;
+          }
+
+          .print-only .pt-2 {
+            padding-top: 0.3rem !important;
+          }
+
+          /* Hide screen elements */
+          [class*="CardHeader"],
+          .no-print {
+            display: none !important;
+          }
+
+          [class*="CardContent"] {
+            padding: 0 !important;
+          }
+
+          /* Clean card styling */
+          .border,
+          .border-slate-200,
+          .border-slate-100,
+          .rounded-lg,
+          .rounded-xl {
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+          }
+
+          .mb-8 {
+            margin-bottom: 0 !important;
+          }
+
+          /* Table styling */
+          table {
+            border-collapse: collapse !important;
+            page-break-inside: auto !important;
+            width: 100% !important;
+            margin-top: 0.5rem !important;
+          }
+
+          thead {
+            background: #e8e8e8 !important;
+          }
+
+          tr {
+            page-break-inside: avoid !important;
+            page-break-after: auto !important;
+          }
+
+          thead tr {
+            display: table-header-group !important;
+          }
+
+          th {
+            padding: 0.35rem 0.4rem !important;
+            font-size: 9pt !important;
+            font-weight: 700 !important;
+            color: #000 !important;
+            text-transform: uppercase !important;
+            border: 1px solid #666 !important;
+            white-space: nowrap !important;
+            background: #e8e8e8 !important;
+          }
+
+          th .no-print {
+            display: none !important;
+          }
+
+          th .print-only {
+            display: inline !important;
+          }
+
+          /* Hide action column */
+          th:last-child,
+          td:last-child {
+            display: none !important;
+          }
+
+          td {
+            padding: 0.25rem 0.4rem !important;
+            font-size: 10.5pt !important;
+            color: #000 !important;
+            border: 1px solid #ccc !important;
+            vertical-align: middle !important;
+          }
+
+          tbody tr {
+            border: 1px solid #ccc !important;
+          }
+
+          tbody tr:nth-child(even) {
+            background: #fafafa !important;
+          }
+
+          tbody tr:hover {
+            background: transparent !important;
+          }
+
+          /* Hide badges, show text only */
+          .rounded-full {
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+            border-radius: 0 !important;
+          }
+
+          .rounded-full .no-print {
+            display: none !important;
+          }
+
+          .rounded-full .print-only {
+            display: inline !important;
+            font-size: 10pt !important;
+            font-weight: 600 !important;
+          }
+
+          /* Color adjustments */
+          .text-red-600,
+          .text-red-800 {
+            color: #c00 !important;
+            font-weight: 600 !important;
+          }
+
+          .text-green-600,
+          .text-green-800 {
+            color: #080 !important;
+            font-weight: 600 !important;
+          }
+
+          .text-blue-800 {
+            color: #004 !important;
+          }
+
+          .text-green-800 {
+            color: #040 !important;
+          }
+
+          .bg-blue-100,
+          .bg-green-100,
+          .bg-red-100 {
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+          }
+
+          /* Hide all interactive elements */
+          button,
+          svg {
+            display: none !important;
+          }
+
+          /* Text sizes */
+          .text-xs {
+            font-size: 9.5pt !important;
+          }
+
+          .text-sm {
+            font-size: 10.5pt !important;
+          }
+
+          .text-base {
+            font-size: 11pt !important;
+          }
+
+          /* Font weights */
+          .font-bold {
+            font-weight: 700 !important;
+          }
+
+          .font-semibold {
+            font-weight: 600 !important;
+          }
+
+          .font-medium {
+            font-weight: 500 !important;
+          }
+
+          /* Text alignment */
+          .text-right {
+            text-align: right !important;
+          }
+
+          .text-left {
+            text-align: left !important;
+          }
+
+          .text-center {
+            text-align: center !important;
+          }
+
+          /* Notes styling */
+          .text-xs.text-slate-500 {
+            font-size: 9pt !important;
+            color: #666 !important;
+            font-style: italic !important;
+          }
+
+          /* Balance highlight */
+          td:nth-last-child(2) {
+            font-weight: 700 !important;
+          }
+
+          /* Clean layout */
+          .max-w-7xl,
+          .max-w-4xl {
+            max-width: 100% !important;
+            margin: 0 !important;
+          }
+
+          .mx-auto {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+          }
+
+          .overflow-x-auto {
+            overflow: visible !important;
+          }
+
+          /* Bengali font support */
+          .print-bn {
+            font-family: 'Noto Sans Bengali', 'SolaimanLipi', Arial, sans-serif !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

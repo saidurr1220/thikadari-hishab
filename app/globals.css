@@ -73,6 +73,12 @@
     line-height: 1.1;
   }
 
+  /* Hide sidebar and hamburger menu */
+  aside,
+  nav,
+  .sidebar,
+  [class*="sidebar"],
+  button[aria-label*="menu"],
   .no-print {
     display: none !important;
   }
