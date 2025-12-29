@@ -475,7 +475,7 @@ export default function VendorDetailPage({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
-      <div className="max-w-7xl mx-auto px-4 py-8 lg:pl-8 pl-20">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-6 lg:space-y-8">
         {/* Print Header - Only visible in print */}
         <div className="print-header">
           {/* Company Name & Address */}
@@ -528,32 +528,33 @@ export default function VendorDetailPage({
         </div>
 
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4 no-print">
+        <div className="mb-4 sm:mb-6 md:mb-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4 no-print">
             <Link
               href={`/tender/${params.tenderId}/purchases`}
-              className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900"
+              className="inline-flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900"
             >
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />
               Back to purchases
             </Link>
             
             <Button
               onClick={() => window.print()}
               variant="outline"
-              className="gap-2"
+              className="gap-1.5 sm:gap-2 text-xs sm:text-sm h-8 sm:h-9 md:h-10"
             >
-              <Printer className="h-4 w-4" />
-              Print Statement
+              <Printer className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Print Statement</span>
+              <span className="xs:hidden">Print</span>
             </Button>
           </div>
 
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900 mb-2">
+          <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2 truncate">
                 {vendor.name}
               </h1>
-              <div className="flex items-center gap-3 text-sm text-slate-600">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-xs sm:text-sm text-slate-600">
                 {vendor.phone && (
                   <div className="flex items-center gap-1">
                     <Phone className="h-4 w-4" />
@@ -578,14 +579,15 @@ export default function VendorDetailPage({
               </div>
             </div>
 
-            <div className="flex gap-2 no-print">
+            <div className="flex flex-wrap gap-2 no-print">
               <Button
                 onClick={handleEditVendor}
                 variant="outline"
-                className="gap-2"
+                className="gap-1.5 sm:gap-2 text-xs sm:text-sm h-8 sm:h-9 md:h-10 px-2.5 sm:px-3 md:px-4"
               >
-                <Edit className="h-4 w-4" />
-                Edit Profile
+                <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">Edit Profile</span>
+                <span className="xs:hidden">Edit</span>
               </Button>
               <Button
                 onClick={() =>
@@ -594,10 +596,11 @@ export default function VendorDetailPage({
                   )
                 }
                 variant="outline"
-                className="gap-2"
+                className="gap-1.5 sm:gap-2 text-xs sm:text-sm h-8 sm:h-9 md:h-10 px-2.5 sm:px-3 md:px-4"
               >
-                <ShoppingCart className="h-4 w-4" />
-                Add Purchase
+                <ShoppingCart className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">Add Purchase</span>
+                <span className="xs:hidden">Add</span>
               </Button>
               <Button
                 onClick={() => setShowPaymentForm(true)}

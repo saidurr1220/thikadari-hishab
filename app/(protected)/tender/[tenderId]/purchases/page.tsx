@@ -484,11 +484,12 @@ export default function PurchasesPage({
           </div>
 
           {activeTab === "purchases" && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button
                 variant={filterType === "all" ? "default" : "outline"}
                 onClick={() => setFilterType("all")}
                 size="sm"
+                className="text-xs h-8"
               >
                 All
               </Button>
@@ -496,15 +497,19 @@ export default function PurchasesPage({
                 variant={filterType === "material" ? "default" : "outline"}
                 onClick={() => setFilterType("material")}
                 size="sm"
+                className="text-xs h-8"
               >
-                Materials
+                <span className="hidden xs:inline">Materials</span>
+                <span className="xs:hidden">Mat</span>
               </Button>
               <Button
                 variant={filterType === "vendor" ? "default" : "outline"}
                 onClick={() => setFilterType("vendor")}
                 size="sm"
+                className="text-xs h-8"
               >
-                Vendor Items
+                <span className="hidden xs:inline">Vendor Items</span>
+                <span className="xs:hidden">Vendor</span>
               </Button>
             </div>
           )}
@@ -514,7 +519,8 @@ export default function PurchasesPage({
         {activeTab === "purchases" ? (
           <Card>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+              {/* Desktop Table View - Hidden on Mobile */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
@@ -639,6 +645,92 @@ export default function PurchasesPage({
                     )}
                   </tbody>
                 </table>
+              </div>
+              
+              {/* Mobile Card View - Visible on Mobile Only */}
+              <div className="md:hidden divide-y divide-slate-200">
+                {filteredPurchases.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-slate-500">
+                    No purchases found
+                  </div>
+                ) : (
+                  filteredPurchases.map((purchase) => (
+                    <div key={purchase.id} className="p-4 hover:bg-slate-50">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold text-slate-900 truncate">
+                            {purchase.item_name}
+                          </div>
+                          {purchase.vendor_id ? (
+                            <Link
+                              href={`/tender/${params.tenderId}/purchases/vendor/${purchase.vendor_id}`}
+                              className="text-xs text-blue-600 hover:text-blue-800 font-medium truncate block"
+                            >
+                              {purchase.vendor_name}
+                            </Link>
+                          ) : (
+                            <span className="text-xs text-slate-600 truncate block">
+                              {purchase.vendor_name}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-1 ml-2">
+                          <span
+                            className={`inline-flex px-2 py-0.5 text-[10px] font-medium rounded-full whitespace-nowrap ${
+                              purchase.type === "material"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-purple-100 text-purple-800"
+                            }`}
+                          >
+                            {purchase.type === "material" ? "Mat" : "Ven"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-slate-500">Date: </span>
+                          <span className="text-slate-900">{formatDate(purchase.date)}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-slate-500">Qty: </span>
+                          <span className="text-slate-900">{purchase.quantity} {purchase.unit}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
+                        <div className="text-base font-bold text-slate-900">
+                          {formatCurrency(purchase.amount)}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`inline-flex px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                              purchase.payment_status === "paid"
+                                ? "bg-green-100 text-green-800"
+                                : purchase.payment_status === "partial"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {purchase.payment_status}
+                          </span>
+                          {purchase.vendor_id && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                router.push(
+                                  `/tender/${params.tenderId}/purchases/vendor/${purchase.vendor_id}`
+                                )
+                              }
+                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-6 w-6 p-0"
+                            >
+                              <Eye className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>

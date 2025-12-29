@@ -102,34 +102,35 @@ export default async function PeopleAdvanceHubPage({
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(167,243,208,0.4),rgba(255,255,255,0))]">
-      <div className="bg-gradient-to-br from-emerald-50 via-white to-slate-50 py-8">
-        <div className="max-w-6xl mx-auto px-4 space-y-6 lg:pl-8 pl-20">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="text-center lg:text-left">
+      <div className="bg-gradient-to-br from-emerald-50 via-white to-slate-50 py-4 sm:py-6 md:py-8">
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 space-y-4 sm:space-y-6">
+          <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
               <Link
                 href={`/tender/${params.tenderId}`}
-                className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900"
+                className="inline-flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900"
               >
-                <ArrowLeft className="h-4 w-4" />
+                <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />
                 Back to tender dashboard
               </Link>
-              <h1 className="text-3xl font-bold text-slate-900 mt-2 flex items-center gap-3">
-                <Users className="h-8 w-8 text-emerald-600" />
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mt-2 flex items-center gap-2 sm:gap-3">
+                <Users className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-emerald-600" />
                 Staff & Workers
               </h1>
-              <p className="text-sm text-slate-500 mt-1">
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">
                 Manage advances and expenses for all staff members
               </p>
             </div>
             <Link href={`/tender/${params.tenderId}/advances/give`}>
-              <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-                <Plus className="h-4 w-4" />
-                Add Person
+              <Button className="gap-1.5 sm:gap-2 bg-emerald-600 hover:bg-emerald-700 text-xs sm:text-sm h-8 sm:h-9 md:h-10 w-full sm:w-auto px-2.5 sm:px-3 md:px-4">
+                <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">Add Person</span>
+                <span className="xs:hidden">Add</span>
               </Button>
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
             <Card className="bg-white/80 border-slate-200/70 shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2">

@@ -81,11 +81,13 @@ export default function AddPurchasePage({
     setVendors(vendorsRes.data || []);
     setMaterials(materialsRes.data || []);
     setCategories(categoriesRes.data || []);
-    
+
     // Auto-select vendor if provided in URL
     const preselectedVendorId = searchParams.get("vendor");
     if (preselectedVendorId && vendorsRes.data) {
-      const vendor = vendorsRes.data.find((v: any) => v.id === preselectedVendorId);
+      const vendor = vendorsRes.data.find(
+        (v: any) => v.id === preselectedVendorId
+      );
       if (vendor) {
         setFormData((prev) => ({
           ...prev,
@@ -97,24 +99,24 @@ export default function AddPurchasePage({
         await loadRecentItems(preselectedVendorId);
       }
     }
-    
+
     setLoadingData(false);
   };
 
   const loadRecentItems = async (vendorId: string) => {
     const supabase = createClient();
-    
+
     // Get vendor products
     const { data: productsData } = await supabase
       .from("vendor_products")
       .select("*, materials(name_bn)")
       .eq("vendor_id", vendorId)
       .order("last_unit_price", { ascending: false });
-    
+
     if (productsData) {
       setVendorProducts(productsData);
     }
-    
+
     // Get recent purchases from this vendor
     const { data } = await supabase
       .from("vendor_purchases")
@@ -123,11 +125,11 @@ export default function AddPurchasePage({
       .not("item_name", "is", null)
       .order("created_at", { ascending: false })
       .limit(10);
-    
+
     if (data) {
       // Get unique items
       const uniqueItems = Array.from(
-        new Map(data.map(item => [item.item_name, item])).values()
+        new Map(data.map((item) => [item.item_name, item])).values()
       );
       setRecentItems(uniqueItems);
     }
@@ -275,9 +277,14 @@ export default function AddPurchasePage({
             formData.paymentMethod === "bank" ||
             formData.paymentMethod === "mfs")
         ) {
-          const paymentNotes = formData.paymentMethod === "mfs" && formData.mfsCharge
-            ? `Auto payment for material: ${formData.customItemName || "Material purchase"} (incl. MFS charge)`
-            : `Auto payment for material: ${formData.customItemName || "Material purchase"}`;
+          const paymentNotes =
+            formData.paymentMethod === "mfs" && formData.mfsCharge
+              ? `Auto payment for material: ${
+                  formData.customItemName || "Material purchase"
+                } (incl. MFS charge)`
+              : `Auto payment for material: ${
+                  formData.customItemName || "Material purchase"
+                }`;
 
           const { error: paymentError } = await supabase
             .from("vendor_payments")
@@ -309,7 +316,8 @@ export default function AddPurchasePage({
             quantity: parseFloat(formData.quantity),
             unit: formData.unit,
             unit_price: parseFloat(formData.unitRate),
-            base_cost: parseFloat(formData.quantity) * parseFloat(formData.unitRate),
+            base_cost:
+              parseFloat(formData.quantity) * parseFloat(formData.unitRate),
             transport_cost: formData.transportCost
               ? parseFloat(formData.transportCost)
               : null,
@@ -331,9 +339,10 @@ export default function AddPurchasePage({
           formData.paymentMethod === "bank" ||
           formData.paymentMethod === "mfs"
         ) {
-          const paymentNotes = formData.paymentMethod === "mfs" && formData.mfsCharge
-            ? `Auto payment for purchase: ${formData.customItemName} (incl. MFS charge)`
-            : `Auto payment for purchase: ${formData.customItemName}`;
+          const paymentNotes =
+            formData.paymentMethod === "mfs" && formData.mfsCharge
+              ? `Auto payment for purchase: ${formData.customItemName} (incl. MFS charge)`
+              : `Auto payment for purchase: ${formData.customItemName}`;
 
           const { error: paymentError } = await supabase
             .from("vendor_payments")
@@ -481,7 +490,9 @@ export default function AddPurchasePage({
                         onChange={handleChange}
                       />
                       <div>
-                        <Label className="text-xs mb-2 block">Categories (select multiple)</Label>
+                        <Label className="text-xs mb-2 block">
+                          Categories (select multiple)
+                        </Label>
                         <div className="bg-white border rounded-md p-3 max-h-40 overflow-y-auto">
                           <div className="grid grid-cols-2 gap-2">
                             {categories.map((c) => (
@@ -491,19 +502,25 @@ export default function AddPurchasePage({
                               >
                                 <input
                                   type="checkbox"
-                                  checked={formData.newVendorCategoryIds.includes(c.id)}
+                                  checked={formData.newVendorCategoryIds.includes(
+                                    c.id
+                                  )}
                                   onChange={(e) => {
                                     if (e.target.checked) {
                                       setFormData((p) => ({
                                         ...p,
-                                        newVendorCategoryIds: [...p.newVendorCategoryIds, c.id],
+                                        newVendorCategoryIds: [
+                                          ...p.newVendorCategoryIds,
+                                          c.id,
+                                        ],
                                       }));
                                     } else {
                                       setFormData((p) => ({
                                         ...p,
-                                        newVendorCategoryIds: p.newVendorCategoryIds.filter(
-                                          (id) => id !== c.id
-                                        ),
+                                        newVendorCategoryIds:
+                                          p.newVendorCategoryIds.filter(
+                                            (id) => id !== c.id
+                                          ),
                                       }));
                                     }
                                   }}
@@ -566,19 +583,23 @@ export default function AddPurchasePage({
                       ? "Custom Item Name"
                       : "Item Name *"}
                   </Label>
-                  
+
                   {/* Show vendor products dropdown if vendor is selected */}
                   {purchaseType === "vendor" && vendorProducts.length > 0 && (
                     <select
                       value=""
                       onChange={(e) => {
-                        const selectedProduct = vendorProducts.find(p => p.item_name === e.target.value);
+                        const selectedProduct = vendorProducts.find(
+                          (p) => p.item_name === e.target.value
+                        );
                         if (selectedProduct) {
                           setFormData((prev) => ({
                             ...prev,
                             customItemName: selectedProduct.item_name,
                             unit: selectedProduct.unit || prev.unit,
-                            unitRate: selectedProduct.last_unit_price?.toString() || prev.unitRate,
+                            unitRate:
+                              selectedProduct.last_unit_price?.toString() ||
+                              prev.unitRate,
                           }));
                         }
                       }}
@@ -587,16 +608,20 @@ export default function AddPurchasePage({
                       <option value="">Select from vendor products...</option>
                       {vendorProducts.map((p, idx) => (
                         <option key={idx} value={p.item_name}>
-                          {p.item_name} {p.materials?.name_bn && `(${p.materials.name_bn})`} - ৳{p.last_unit_price}/{p.unit}
+                          {p.item_name}{" "}
+                          {p.materials?.name_bn && `(${p.materials.name_bn})`} -
+                          ৳{p.last_unit_price}/{p.unit}
                         </option>
                       ))}
                     </select>
                   )}
-                  
+
                   {/* Show recent items if vendor is selected and has history */}
                   {purchaseType === "vendor" && recentItems.length > 0 && (
                     <div className="mb-2">
-                      <p className="text-xs text-gray-600 mb-1">Recent purchases:</p>
+                      <p className="text-xs text-gray-600 mb-1">
+                        Recent purchases:
+                      </p>
                       <div className="flex flex-wrap gap-2">
                         {recentItems.map((item, idx) => (
                           <button
@@ -607,7 +632,8 @@ export default function AddPurchasePage({
                                 ...prev,
                                 customItemName: item.item_name,
                                 unit: item.unit || prev.unit,
-                                unitRate: item.unit_price?.toString() || prev.unitRate,
+                                unitRate:
+                                  item.unit_price?.toString() || prev.unitRate,
                               }));
                             }}
                             className="px-3 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-full transition-colors"
@@ -618,7 +644,7 @@ export default function AddPurchasePage({
                       </div>
                     </div>
                   )}
-                  
+
                   <Input
                     id="customItemName"
                     name="customItemName"
@@ -746,47 +772,71 @@ export default function AddPurchasePage({
                     <option value="mfs">MFS (bKash, Nagad)</option>
                     <option value="due">Due/Credit</option>
                   </select>
-                  {formData.paymentMethod === "mfs" && formData.paymentMethod !== "due" && (
-                    <div className="mt-3 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="mfsCharge"
-                          checked={formData.mfsCharge}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              mfsCharge: e.target.checked,
-                            }))
-                          }
-                          className="rounded"
-                        />
-                        <label htmlFor="mfsCharge" className="text-sm text-slate-700">
-                          Add MFS charge to total (1.85% + ৳10)
-                        </label>
-                      </div>
-                      {formData.mfsCharge && formData.totalAmount && (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm">
-                          <div className="flex justify-between mb-1">
-                            <span className="text-slate-600">Base Amount:</span>
-                            <span className="font-medium">৳{parseFloat(formData.totalAmount).toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between mb-1">
-                            <span className="text-slate-600">MFS Charge (1.85%):</span>
-                            <span className="font-medium">৳{(parseFloat(formData.totalAmount) * 0.0185).toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between mb-1">
-                            <span className="text-slate-600">Transaction Fee:</span>
-                            <span className="font-medium">৳10.00</span>
-                          </div>
-                          <div className="flex justify-between pt-2 border-t border-yellow-300">
-                            <span className="font-semibold text-slate-800">Final Total:</span>
-                            <span className="font-bold text-lg text-green-700">৳{(parseFloat(formData.totalAmount) * 1.0185 + 10).toFixed(2)}</span>
-                          </div>
+                  {formData.paymentMethod === "mfs" && (
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="mfsCharge"
+                            checked={formData.mfsCharge}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                mfsCharge: e.target.checked,
+                              }))
+                            }
+                            className="rounded"
+                          />
+                          <label
+                            htmlFor="mfsCharge"
+                            className="text-sm text-slate-700"
+                          >
+                            Add MFS charge to total (1.85% + ৳10)
+                          </label>
                         </div>
-                      )}
-                    </div>
-                  )}
+                        {formData.mfsCharge && formData.totalAmount && (
+                          <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm">
+                            <div className="flex justify-between mb-1">
+                              <span className="text-slate-600">
+                                Base Amount:
+                              </span>
+                              <span className="font-medium">
+                                ৳{parseFloat(formData.totalAmount).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between mb-1">
+                              <span className="text-slate-600">
+                                MFS Charge (1.85%):
+                              </span>
+                              <span className="font-medium">
+                                ৳
+                                {(
+                                  parseFloat(formData.totalAmount) * 0.0185
+                                ).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between mb-1">
+                              <span className="text-slate-600">
+                                Transaction Fee:
+                              </span>
+                              <span className="font-medium">৳10.00</span>
+                            </div>
+                            <div className="flex justify-between pt-2 border-t border-yellow-300">
+                              <span className="font-semibold text-slate-800">
+                                Final Total:
+                              </span>
+                              <span className="font-bold text-lg text-green-700">
+                                ৳
+                                {(
+                                  parseFloat(formData.totalAmount) * 1.0185 +
+                                  10
+                                ).toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                 </div>
                 <div>
                   <Label htmlFor="paymentRef">Payment Reference</Label>
