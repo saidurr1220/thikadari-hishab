@@ -76,7 +76,7 @@ export default async function ExpensesOverviewPage({
         if (vendorPayment) {
           sourceTransaction = vendorPayment;
           sourceType = "vendor";
-          sourceName = vendorPayment.vendors?.name || "Unknown Vendor";
+          sourceName = (vendorPayment.vendors as any)?.name || "Unknown Vendor";
         }
       } else if (charge.person_id) {
         // This is a person advance
@@ -87,8 +87,8 @@ export default async function ExpensesOverviewPage({
         if (personAdvance) {
           sourceTransaction = personAdvance;
           sourceType = "person";
-          sourceName = personAdvance.persons?.name_bn || 
-                      personAdvance.profiles?.full_name || 
+          sourceName = (personAdvance.persons as any)?.name_bn || 
+                      (personAdvance.profiles as any)?.full_name || 
                       "Unknown Person";
         }
       }
