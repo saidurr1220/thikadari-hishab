@@ -105,7 +105,7 @@ export default async function PeopleAdvanceHubPage({
       <div className="bg-gradient-to-br from-emerald-50 via-white to-slate-50 py-4 sm:py-6 md:py-8">
         <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 space-y-4 sm:space-y-6">
           <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
+            <div className="text-center md:text-left">
               <Link
                 href={`/tender/${params.tenderId}`}
                 className="inline-flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900"
@@ -113,7 +113,7 @@ export default async function PeopleAdvanceHubPage({
                 <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />
                 Back to tender dashboard
               </Link>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mt-2 flex items-center gap-2 sm:gap-3">
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mt-2 flex items-center justify-center md:justify-start gap-2 sm:gap-3">
                 <Users className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-emerald-600" />
                 Staff & Workers
               </h1>
@@ -132,43 +132,46 @@ export default async function PeopleAdvanceHubPage({
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
             <Card className="bg-white/80 border-slate-200/70 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  Total Advances
+              <CardHeader className="pb-2 sm:pb-3">
+                <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1.5 sm:gap-2">
+                  <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline">Total Advances</span>
+                  <span className="xs:hidden">Advances</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-emerald-600">
+                <div className="text-lg sm:text-xl md:text-2xl font-bold text-emerald-600 break-all">
                   {formatCurrency(totalAdvances)}
                 </div>
               </CardContent>
             </Card>
 
             <Card className="bg-white/80 border-slate-200/70 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2">
-                  <TrendingDown className="h-4 w-4" />
-                  Total Expenses
+              <CardHeader className="pb-2 sm:pb-3">
+                <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1.5 sm:gap-2">
+                  <TrendingDown className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline">Total Expenses</span>
+                  <span className="xs:hidden">Expenses</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-600">
+                <div className="text-lg sm:text-xl md:text-2xl font-bold text-red-600 break-all">
                   {formatCurrency(totalExpenses)}
                 </div>
               </CardContent>
             </Card>
 
             <Card className="bg-white/80 border-slate-200/70 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" />
-                  Net Balance
+              <CardHeader className="pb-2 sm:pb-3">
+                <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1.5 sm:gap-2">
+                  <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline">Net Balance</span>
+                  <span className="xs:hidden">Balance</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div
-                  className={`text-2xl font-bold ${
+                  className={`text-lg sm:text-xl md:text-2xl font-bold break-all ${
                     netBalance > 0
                       ? "text-blue-600"
                       : netBalance < 0
@@ -182,14 +185,15 @@ export default async function PeopleAdvanceHubPage({
             </Card>
 
             <Card className="bg-white/80 border-slate-200/70 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Total People
+              <CardHeader className="pb-2 sm:pb-3">
+                <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1.5 sm:gap-2">
+                  <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline">Total People</span>
+                  <span className="xs:hidden">People</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-slate-900">
+                <div className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900">
                   {balances?.length || 0}
                 </div>
               </CardContent>
@@ -225,22 +229,22 @@ export default async function PeopleAdvanceHubPage({
                         key={bal.person_id}
                         href={`/tender/${params.tenderId}/advances/people/${bal.person_id}`}
                       >
-                        <div className="border border-slate-200 rounded-lg p-4 bg-white group hover:shadow-md hover:border-emerald-300 transition-all">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-3 flex-1">
+                        <div className="border border-slate-200 rounded-lg p-3 sm:p-4 bg-white group hover:shadow-md hover:border-emerald-300 transition-all">
+                          <div className="flex flex-col xs:flex-row items-start xs:items-start xs:justify-between gap-3">
+                            <div className="flex items-center gap-2 sm:gap-3 flex-1 w-full">
                               <div className="h-10 w-10 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-200 flex items-center justify-center flex-shrink-0">
                                 <User className="h-5 w-5 text-emerald-700" />
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className="font-semibold text-lg text-slate-900 group-hover:text-emerald-700 transition-colors truncate">
+                                <p className="font-semibold text-base sm:text-lg text-slate-900 group-hover:text-emerald-700 transition-colors truncate">
                                   {bal.person_name}
                                 </p>
                                 {bal.role && (
-                                  <p className="text-sm text-slate-500 mt-0.5">
+                                  <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
                                     {bal.role}
                                   </p>
                                 )}
-                                <div className="flex gap-3 mt-2 text-xs text-slate-600">
+                                <div className="flex flex-wrap gap-2 sm:gap-3 mt-1.5 sm:mt-2 text-xs text-slate-600">
                                   <span className="flex items-center gap-1">
                                     <TrendingUp className="h-3 w-3 text-emerald-600" />
                                     {formatCurrency(bal.total_advances)}
@@ -252,9 +256,9 @@ export default async function PeopleAdvanceHubPage({
                                 </div>
                               </div>
                             </div>
-                            <div className="text-right flex-shrink-0">
+                            <div className="text-left xs:text-right flex-shrink-0 w-full xs:w-auto">
                               <p
-                                className={`text-xl font-bold ${
+                                className={`text-lg sm:text-xl font-bold ${
                                   bal.balance > 0
                                     ? "text-blue-600"
                                     : bal.balance < 0

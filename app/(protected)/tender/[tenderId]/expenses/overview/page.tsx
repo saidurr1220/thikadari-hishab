@@ -25,6 +25,19 @@ export default async function ExpensesOverviewPage({
     .eq("tender_id", params.tenderId)
     .order("entry_date", { ascending: false });
 
+  // Fetch MFS transactions for linking
+  const { data: vendorPayments } = await supabase
+    .from("vendor_payments")
+    .select("id, payment_date, amount, vendor_id, vendors(name)")
+    .eq("tender_id", params.tenderId)
+    .eq("payment_method", "mfs");
+
+  const { data: personAdvances } = await supabase
+    .from("person_advances")
+    .select("id, advance_date, amount, person_id, user_id, persons(name_bn), profiles(full_name)")
+    .eq("tender_id", params.tenderId)
+    .eq("payment_method", "mfs");
+
   const total =
     expenses?.reduce((sum, e: any) => sum + Number(e.amount || 0), 0) || 0;
 
@@ -38,12 +51,65 @@ export default async function ExpensesOverviewPage({
     return acc;
   }, {});
 
+  // Group MFS charges by date with their transactions
+  const mfsChargesByDate = expenses
+    ?.filter((e: any) => e.source_type === "mfs_charge")
+    .reduce((acc: any, charge: any) => {
+      const dateKey = charge.entry_date;
+      if (!acc[dateKey]) {
+        acc[dateKey] = {
+          charges: [],
+          totalCharge: 0,
+        };
+      }
+      
+      // Find the source transaction - match by date and ID
+      let sourceTransaction = null;
+      let sourceType = "unknown";
+      let sourceName = "Unknown";
+
+      if (charge.vendor_id) {
+        // This is a vendor payment
+        const vendorPayment = vendorPayments?.find(
+          (vp: any) => vp.payment_date === charge.entry_date && vp.vendor_id === charge.vendor_id
+        );
+        if (vendorPayment) {
+          sourceTransaction = vendorPayment;
+          sourceType = "vendor";
+          sourceName = vendorPayment.vendors?.name || "Unknown Vendor";
+        }
+      } else if (charge.person_id) {
+        // This is a person advance
+        const personAdvance = personAdvances?.find(
+          (pa: any) => pa.advance_date === charge.entry_date && 
+            (pa.person_id === charge.person_id || pa.user_id === charge.person_id)
+        );
+        if (personAdvance) {
+          sourceTransaction = personAdvance;
+          sourceType = "person";
+          sourceName = personAdvance.persons?.name_bn || 
+                      personAdvance.profiles?.full_name || 
+                      "Unknown Person";
+        }
+      }
+
+      acc[dateKey].charges.push({
+        ...charge,
+        sourceTransaction,
+        sourceType,
+        sourceName,
+      });
+      acc[dateKey].totalCharge += Number(charge.amount || 0);
+      return acc;
+    }, {}) || {};
+
   const getSourceTypeLabel = (type: string) => {
     const labels: any = {
       vendor_purchase: "Vendor Purchases",
       material_purchase: "Material Purchases",
       labor_entry: "Labor Entries",
       activity_expense: "Site Expenses",
+      mfs_charge: "bKash Charges",
     };
     return labels[type] || type;
   };
@@ -54,6 +120,7 @@ export default async function ExpensesOverviewPage({
       material_purchase: "bg-green-50 border-green-200 text-green-700",
       labor_entry: "bg-blue-50 border-blue-200 text-blue-700",
       activity_expense: "bg-amber-50 border-amber-200 text-amber-700",
+      mfs_charge: "bg-orange-50 border-orange-200 text-orange-700",
     };
     return colors[type] || "bg-gray-50 border-gray-200 text-gray-700";
   };
@@ -71,9 +138,9 @@ export default async function ExpensesOverviewPage({
             Back to tender dashboard
           </Link>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-                <Receipt className="h-8 w-8 text-blue-600" />
+            <div className="text-center md:text-left">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center justify-center md:justify-start gap-3">
+                <Receipt className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
                 All Expenses Overview
               </h1>
               <p className="text-sm text-gray-600 mt-2">
@@ -151,37 +218,125 @@ export default async function ExpensesOverviewPage({
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
-                {expenses.map((e: any, idx: number) => (
-                  <div
-                    key={`${e.source_type}-${idx}`}
-                    className="p-4 sm:p-5 hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-3">
-                          <p className="font-semibold text-gray-900">
-                            {formatDate(e.entry_date)}
-                          </p>
-                          <span
-                            className={`text-xs px-2 py-1 rounded-full border ${getSourceTypeColor(
-                              e.source_type
-                            )}`}
+                {(() => {
+                  // Group expenses by date and merge MFS charges
+                  const grouped: any = {};
+                  const processedMfsDates = new Set();
+
+                  expenses.forEach((e: any, idx: number) => {
+                    const dateKey = e.entry_date;
+                    
+                    if (e.source_type === "mfs_charge") {
+                      if (!processedMfsDates.has(dateKey)) {
+                        processedMfsDates.add(dateKey);
+                        if (!grouped[dateKey]) grouped[dateKey] = [];
+                        grouped[dateKey].push({
+                          type: "mfs_group",
+                          date: dateKey,
+                          data: mfsChargesByDate[dateKey],
+                          idx,
+                        });
+                      }
+                    } else {
+                      if (!grouped[dateKey]) grouped[dateKey] = [];
+                      grouped[dateKey].push({ type: "expense", data: e, idx });
+                    }
+                  });
+
+                  return Object.values(grouped)
+                    .flat()
+                    .map((item: any) => {
+                      if (item.type === "mfs_group") {
+                        return (
+                          <details
+                            key={`mfs-${item.date}`}
+                            className="p-4 sm:p-5 hover:bg-slate-50 transition-colors group"
                           >
-                            {getSourceTypeLabel(e.source_type)}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-600">
-                          {e.description || "No description"}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <p className="text-2xl font-bold text-red-600">
-                          {formatCurrency(e.amount)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                            <summary className="cursor-pointer list-none">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div className="flex-1 space-y-2">
+                                  <div className="flex items-center gap-3">
+                                    <p className="font-semibold text-gray-900">
+                                      {formatDate(item.date)}
+                                    </p>
+                                    <span className="text-xs px-2 py-1 rounded-full border bg-orange-50 border-orange-200 text-orange-700">
+                                      bKash Charges ({item.data.charges.length})
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-gray-600">
+                                    Click to view {item.data.charges.length} transaction{item.data.charges.length > 1 ? "s" : ""}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <p className="text-2xl font-bold text-orange-600">
+                                    {formatCurrency(item.data.totalCharge)}
+                                  </p>
+                                </div>
+                              </div>
+                            </summary>
+                            <div className="mt-4 ml-4 space-y-3 border-l-2 border-orange-200 pl-4">
+                              {item.data.charges.map((charge: any, cidx: number) => (
+                                <div
+                                  key={cidx}
+                                  className="bg-orange-50/50 rounded-lg p-3 border border-orange-100"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex-1">
+                                      <p className="font-medium text-gray-800">
+                                        {charge.sourceName || "Unknown"}
+                                      </p>
+                                      <p className="text-sm text-gray-600 mt-1">
+                                        Payment: {formatCurrency(charge.sourceTransaction?.amount || 0)}
+                                      </p>
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        {charge.sourceType === "vendor" ? "Vendor Payment" : "Person Advance"}
+                                      </p>
+                                    </div>
+                                    <p className="font-semibold text-orange-600">
+                                      {formatCurrency(charge.amount)}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        );
+                      } else {
+                        const e = item.data;
+                        return (
+                          <div
+                            key={`${e.source_type}-${item.idx}`}
+                            className="p-4 sm:p-5 hover:bg-slate-50 transition-colors"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <div className="flex-1 space-y-2">
+                                <div className="flex items-center gap-3">
+                                  <p className="font-semibold text-gray-900">
+                                    {formatDate(e.entry_date)}
+                                  </p>
+                                  <span
+                                    className={`text-xs px-2 py-1 rounded-full border ${getSourceTypeColor(
+                                      e.source_type
+                                    )}`}
+                                  >
+                                    {getSourceTypeLabel(e.source_type)}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                  {e.description || "No description"}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <p className="text-2xl font-bold text-red-600">
+                                  {formatCurrency(e.amount)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                    });
+                })()}
               </div>
             )}
           </CardContent>

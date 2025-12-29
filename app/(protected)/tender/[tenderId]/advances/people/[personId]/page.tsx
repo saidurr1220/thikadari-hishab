@@ -93,9 +93,27 @@ export default function PersonAdvanceLedgerPage({
       notes: e.notes,
     }));
 
-    return [...advTxn, ...expTxn].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    // Sort by date (oldest first) to calculate running balance
+    const sorted = [...advTxn, ...expTxn].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
+
+    // Calculate running balance for each transaction
+    let runningBalance = 0;
+    const withBalance = sorted.map((txn) => {
+      if (txn.type === "advance") {
+        runningBalance += txn.amount;
+      } else {
+        runningBalance -= txn.amount;
+      }
+      return {
+        ...txn,
+        balance: runningBalance,
+      };
+    });
+
+    // Return in reverse order (newest first) for display
+    return withBalance.reverse();
   }, [advances, expenses]);
 
   const stats = useMemo(() => {
@@ -656,16 +674,19 @@ export default function PersonAdvanceLedgerPage({
                         Date
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase">
-                        Type
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase">
                         Description
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase">
                         Method
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-slate-600 uppercase">
-                        Amount
+                      <th className="px-4 py-3 text-right text-xs font-medium text-emerald-600 uppercase">
+                        Credit (+)
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-red-600 uppercase">
+                        Debit (-)
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-blue-600 uppercase">
+                        Balance
                       </th>
                       <th className="px-4 py-3 text-center text-xs font-medium text-slate-600 uppercase">
                         Actions
@@ -673,33 +694,33 @@ export default function PersonAdvanceLedgerPage({
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-200">
-                    {transactions.map((txn) => (
+                    {transactions.map((txn: any) => (
                       <tr key={txn.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 text-sm text-slate-900">
+                        <td className="px-4 py-3 text-sm text-slate-900 whitespace-nowrap">
                           {formatDate(txn.date)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              txn.type === "advance"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : "bg-red-100 text-red-800"
-                            }`}
-                          >
-                            {txn.type === "advance" ? (
-                              <TrendingUp className="h-3 w-3" />
-                            ) : (
-                              <TrendingDown className="h-3 w-3" />
-                            )}
-                            {txn.type === "advance" ? "Advance" : "Expense"}
-                          </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-900">
                           <div>
-                            <p className="font-medium">{txn.description}</p>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  txn.type === "advance"
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : "bg-red-100 text-red-800"
+                                }`}
+                              >
+                                {txn.type === "advance" ? (
+                                  <TrendingUp className="h-3 w-3" />
+                                ) : (
+                                  <TrendingDown className="h-3 w-3" />
+                                )}
+                                {txn.type === "advance" ? "Advance" : "Expense"}
+                              </span>
+                              <p className="font-medium">{txn.description}</p>
+                            </div>
                             {txn.notes && (
-                              <p className="text-xs text-slate-500 mt-0.5">
-                                {txn.notes}
+                              <p className="text-xs text-slate-500 mt-1">
+                                Note: {txn.notes}
                               </p>
                             )}
                             {txn.payment_ref && (
@@ -709,18 +730,26 @@ export default function PersonAdvanceLedgerPage({
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-600 capitalize">
+                        <td className="px-4 py-3 text-sm text-slate-600 capitalize whitespace-nowrap">
                           {txn.payment_method || "-"}
                         </td>
-                        <td
-                          className={`px-4 py-3 text-sm font-semibold text-right ${
-                            txn.type === "advance"
-                              ? "text-emerald-600"
-                              : "text-red-600"
-                          }`}
-                        >
-                          {txn.type === "advance" ? "+" : "-"}
-                          {formatCurrency(txn.amount)}
+                        <td className="px-4 py-3 text-sm font-semibold text-right text-emerald-600 whitespace-nowrap">
+                          {txn.type === "advance" ? formatCurrency(txn.amount) : "-"}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-right text-red-600 whitespace-nowrap">
+                          {txn.type === "expense" ? formatCurrency(txn.amount) : "-"}
+                        </td>
+                        <td className={`px-4 py-3 text-sm font-bold text-right whitespace-nowrap ${
+                          txn.balance > 0
+                            ? "text-blue-600"
+                            : txn.balance < 0
+                            ? "text-orange-600"
+                            : "text-slate-600"
+                        }`}>
+                          {formatCurrency(Math.abs(txn.balance))}
+                          {txn.balance < 0 && (
+                            <span className="text-xs text-orange-500 ml-1">Dr</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <EntryActions

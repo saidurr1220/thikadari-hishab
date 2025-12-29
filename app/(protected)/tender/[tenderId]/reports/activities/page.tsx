@@ -63,9 +63,9 @@ export default function ActivitiesRegisterPage({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-8">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="mb-6 flex items-center justify-between no-print">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-4 sm:py-6 md:py-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
+        <div className="mb-4 sm:mb-6 no-print space-y-3">
           <Link
             href={`/tender/${params.tenderId}/reports`}
             className="flex items-center text-blue-600 hover:text-blue-800 font-medium transition-colors"
@@ -73,24 +73,27 @@ export default function ActivitiesRegisterPage({
             <ChevronLeft className="w-4 h-4 mr-1" />
             রিপোর্ট মেনু
           </Link>
-          <h1 className="text-2xl font-bold text-gray-800">
-            {labels.activityRegister}
-          </h1>
-          <div className="flex gap-2">
-            <Button
-              onClick={handleExport}
-              className="bg-green-600 hover:bg-green-700 gap-2"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              Excel Export
-            </Button>
-            <Button
-              onClick={handlePrint}
-              className="bg-blue-600 hover:bg-blue-700 gap-2"
-            >
-              <Printer className="w-4 h-4" />
-              Print
-            </Button>
+          
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-800">
+              {labels.activityRegister}
+            </h1>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleExport}
+                className="bg-green-600 hover:bg-green-700 gap-2 text-xs sm:text-sm h-8 sm:h-9"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Excel
+              </Button>
+              <Button
+                onClick={handlePrint}
+                className="bg-blue-600 hover:bg-blue-700 gap-2 text-xs sm:text-sm h-8 sm:h-9"
+              >
+                <Printer className="w-4 h-4" />
+                Print
+              </Button>
+            </div>
           </div>
         </div>
 

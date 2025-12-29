@@ -124,14 +124,15 @@ export default function DailySheetPage({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-8">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="mb-6 no-print">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-4 sm:py-6 md:py-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
+        <div className="mb-4 sm:mb-6 no-print">
           <Link
             href={`/tender/${params.tenderId}/reports`}
-            className="text-blue-600 hover:text-blue-800 text-sm"
+            className="flex items-center text-blue-600 hover:text-blue-800 font-medium transition-colors"
           >
-            ← রিপোর্ট মেনু
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            রিপোর্ট মেনু
           </Link>
         </div>
 
@@ -393,15 +394,15 @@ export default function DailySheetPage({
             {data.advances.length > 0 && (
               <Card className="mb-6">
                 <CardHeader>
-                  <CardTitle>à¦…à¦—à§à¦°à¦¿à¦® à¦ªà§à¦°à¦¦à¦¾à¦¨</CardTitle>
+                  <CardTitle>অগ্রিম প্রদান</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left py-2">à¦¬à§à¦¯à¦•à§à¦¤à¦¿</th>
+                        <th className="text-left py-2">ব্যক্তি</th>
                         <th className="text-left py-2">
-                          à¦‰à¦¦à§à¦¦à§‡à¦¶à§à¦¯
+                          উদ্দেশ্য
                         </th>
                         <th className="text-right py-2">পরিমাণ</th>
                       </tr>
@@ -434,13 +435,13 @@ export default function DailySheetPage({
             <Card>
               <CardHeader>
                 <CardTitle>
-                  à¦¦à¦¿à¦¨à§‡à¦° à¦¸à¦¾à¦°à¦¸à¦‚à¦•à§à¦·à§‡à¦ª
+                  দিনের সারসংক্ষেপ
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   <div className="flex justify-between py-2 border-b">
-                    <span>à¦¶à§à¦°à¦®à¦¿à¦• à¦–à¦°à¦š:</span>
+                    <span>শ্রমিক খরচ:</span>
                     <span className="font-semibold">
                       {formatCurrency(laborTotal)}
                     </span>
@@ -459,7 +460,7 @@ export default function DailySheetPage({
                   </div>
                   {advancesTotal > 0 && (
                     <div className="flex justify-between py-2 border-b">
-                      <span>à¦…à¦—à§à¦°à¦¿à¦®:</span>
+                      <span>অগ্রিম:</span>
                       <span className="font-semibold">
                         {formatCurrency(advancesTotal)}
                       </span>
@@ -505,6 +506,19 @@ export default function DailySheetPage({
           }
           .print-content {
             padding: 20px;
+          }
+          table {
+            page-break-inside: auto;
+          }
+          tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+          thead {
+            display: table-header-group;
+          }
+          tfoot {
+            display: table-footer-group;
           }
           @page {
             size: A4 portrait;
