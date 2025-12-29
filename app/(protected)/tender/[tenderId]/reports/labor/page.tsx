@@ -175,11 +175,28 @@ export default function LaborRegisterPage({
 
       <style>{`
         @media print {
+          body {
+            overflow: visible !important;
+          }
           .no-print {
             display: none !important;
           }
           .print-content {
             padding: 20px;
+            page-break-inside: auto;
+          }
+          table {
+            page-break-inside: auto;
+          }
+          tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+          thead {
+            display: table-header-group;
+          }
+          tfoot {
+            display: table-footer-group;
           }
           @page {
             size: A4 portrait;
