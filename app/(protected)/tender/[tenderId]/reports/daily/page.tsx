@@ -477,22 +477,16 @@ export default function DailySheetPage({
             {/* Footer */}
             <div className="mt-8 pt-8 border-t-2 grid grid-cols-3 gap-8 text-center text-sm">
               <div>
-                <p className="mb-8">à¦ªà§à¦°à¦¸à§à¦¤à§à¦¤à¦•à¦¾à¦°à§€</p>
-                <p className="border-t pt-2">
-                  à¦¸à§à¦¬à¦¾à¦•à§à¦·à¦° à¦“ তারিখ
-                </p>
+                <p className="mb-8">প্রস্তুতকারী</p>
+                <p className="border-t pt-2">স্বাক্ষর ও তারিখ</p>
               </div>
               <div>
-                <p className="mb-8">à¦ªà¦°à§€à¦•à§à¦·à¦•</p>
-                <p className="border-t pt-2">
-                  à¦¸à§à¦¬à¦¾à¦•à§à¦·à¦° à¦“ তারিখ
-                </p>
+                <p className="mb-8">পরীক্ষক</p>
+                <p className="border-t pt-2">স্বাক্ষর ও তারিখ</p>
               </div>
               <div>
-                <p className="mb-8">à¦…à¦¨à§à¦®à§‹à¦¦à¦¨à¦•à¦¾à¦°à§€</p>
-                <p className="border-t pt-2">
-                  à¦¸à§à¦¬à¦¾à¦•à§à¦·à¦° à¦“ তারিখ
-                </p>
+                <p className="mb-8">অনুমোদনকারী</p>
+                <p className="border-t pt-2">স্বাক্ষর ও তারিখ</p>
               </div>
             </div>
           </div>
