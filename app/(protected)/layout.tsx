@@ -41,9 +41,11 @@ export default async function ProtectedLayout({
   const tenders = assignments?.map((a) => a.tenders).filter(Boolean) || [];
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 print:block print:h-auto print:overflow-visible">
       <Sidebar tenders={tenders as any} userRole={profile?.role || "user"} />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="flex-1 overflow-y-auto print:overflow-visible print:h-auto print:block">
+        {children}
+      </main>
     </div>
   );
 }

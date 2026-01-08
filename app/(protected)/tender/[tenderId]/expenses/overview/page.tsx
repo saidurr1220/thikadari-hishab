@@ -34,27 +34,15 @@ export default async function ExpensesOverviewPage({
 
   const { data: personAdvances } = await supabase
     .from("person_advances")
-<<<<<<< HEAD
     .select(`
-      id, 
-      advance_date, 
-      amount, 
-      person_id, 
-      user_id, 
-      person:persons!person_advances_person_id_fkey (full_name), 
+      id,
+      advance_date,
+      amount,
+      person_id,
+      user_id,
+      person:persons!person_advances_person_id_fkey (full_name),
       user:profiles!person_advances_user_id_fkey (full_name)
     `)
-=======
-    .select(`
-      id, 
-      advance_date, 
-      amount, 
-      person_id, 
-      user_id, 
-      person:persons!person_advances_person_id_fkey (full_name), 
-      user:profiles!person_advances_user_id_fkey (full_name)
-    `)
->>>>>>> master
     .eq("tender_id", params.tenderId)
     .eq("payment_method", "mfs");
 
@@ -73,42 +61,6 @@ export default async function ExpensesOverviewPage({
 
   // Group MFS charges by date with their transactions
   const mfsChargesByDate = expenses
-          // Debug: detect what type of IDs we have
-          const cVendorId = charge.vendor_id;
-          const cPersonId = charge.person_id;
-
-          if (cVendorId) {
-            // This is a vendor payment
-            const vendorPayment = vendorPayments?.find(
-              (vp: any) => String(vp.vendor_id) === String(cVendorId)
-            );
-            if (vendorPayment) {
-              sourceTransaction = vendorPayment;
-              sourceType = "vendor";
-              sourceName = (vendorPayment.vendors as any)?.name || "Vendor Payment";
-            }
-          } else if (cPersonId) {
-            // This is a person advance
-            const personAdvance = personAdvances?.find(
-              (pa: any) => 
-                String(pa.person_id) === String(cPersonId) || 
-                String(pa.user_id) === String(cPersonId)
-            );
-            if (personAdvance) {
-              sourceTransaction = personAdvance;
-              sourceType = "person";
-              sourceName = (personAdvance.person as any)?.full_name || 
-                          (personAdvance.user as any)?.full_name || 
-                          "Staff/Person";
-            }
-          }
-
-          acc[dateKey].charges.push({
-            ...charge,
-            sourceTransaction,
-            sourceType: sourceType === "unknown" && (cPersonId || charge.person_id) ? "person" : (sourceType === "unknown" && (cVendorId || charge.vendor_id) ? "vendor" : sourceType),
-            sourceName: (sourceName === "Unknown" || !sourceName) ? (cVendorId ? "Vendor Payment" : (cPersonId ? "Staff/Person Advance" : "bKash Entry")) : sourceName,
-          });
     ?.filter((e: any) => e.source_type === "mfs_charge")
     .reduce((acc: any, charge: any) => {
       const dateKey = charge.entry_date;
@@ -124,12 +76,6 @@ export default async function ExpensesOverviewPage({
       let sourceType = "unknown";
       let sourceName = "Unknown";
 
-<<<<<<< HEAD
-      if (charge.vendor_id) {
-        // This is a vendor payment
-        const vendorPayment = vendorPayments?.find(
-          (vp: any) => vp.payment_date === charge.entry_date && vp.vendor_id === charge.vendor_id
-=======
       // Debug: detect what type of IDs we have
       const cVendorId = charge.vendor_id;
       const cPersonId = charge.person_id;
@@ -138,20 +84,10 @@ export default async function ExpensesOverviewPage({
         // This is a vendor payment
         const vendorPayment = vendorPayments?.find(
           (vp: any) => String(vp.vendor_id) === String(cVendorId)
->>>>>>> master
         );
         if (vendorPayment) {
           sourceTransaction = vendorPayment;
           sourceType = "vendor";
-<<<<<<< HEAD
-          sourceName = (vendorPayment.vendors as any)?.name || "Unknown Vendor";
-        }
-      } else if (charge.person_id) {
-        // This is a person advance
-        const personAdvance = personAdvances?.find(
-          (pa: any) => pa.advance_date === charge.entry_date && 
-            (pa.person_id === charge.person_id || pa.user_id === charge.person_id)
-=======
           sourceName = (vendorPayment.vendors as any)?.name || "Vendor Payment";
         }
       } else if (cPersonId) {
@@ -160,33 +96,21 @@ export default async function ExpensesOverviewPage({
           (pa: any) => 
             String(pa.person_id) === String(cPersonId) || 
             String(pa.user_id) === String(cPersonId)
->>>>>>> master
         );
         if (personAdvance) {
           sourceTransaction = personAdvance;
           sourceType = "person";
-<<<<<<< HEAD
-          sourceName = (personAdvance.persons as any)?.name_bn || 
-                      (personAdvance.profiles as any)?.full_name || 
-                      "Unknown Person";
-=======
           sourceName = (personAdvance.person as any)?.full_name || 
                       (personAdvance.user as any)?.full_name || 
                       "Staff/Person";
->>>>>>> master
         }
       }
 
       acc[dateKey].charges.push({
         ...charge,
         sourceTransaction,
-<<<<<<< HEAD
-        sourceType,
-        sourceName,
-=======
         sourceType: sourceType === "unknown" && (cPersonId || charge.person_id) ? "person" : (sourceType === "unknown" && (cVendorId || charge.vendor_id) ? "vendor" : sourceType),
         sourceName: (sourceName === "Unknown" || !sourceName) ? (cVendorId ? "Vendor Payment" : (cPersonId ? "Staff/Person Advance" : "bKash Entry")) : sourceName,
->>>>>>> master
       });
       acc[dateKey].totalCharge += Number(charge.amount || 0);
       return acc;
@@ -338,16 +262,9 @@ export default async function ExpensesOverviewPage({
                       if (item.type === "mfs_group") {
                         return (
                           <details
-                                                        <details
-                                                          key={`mfs-${item.date}`}
-                                                          className="p-4 sm:p-5 hover:bg-slate-50 transition-colors group"
-                                                          suppressHydrationWarning
                             key={`mfs-${item.date}`}
                             className="p-4 sm:p-5 hover:bg-slate-50 transition-colors group"
-<<<<<<< HEAD
-=======
                             suppressHydrationWarning
->>>>>>> master
                           >
                             <summary className="cursor-pointer list-none">
                               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -380,14 +297,7 @@ export default async function ExpensesOverviewPage({
                                   <div className="flex items-start justify-between gap-3">
                                     <div className="flex-1">
                                       <p className="font-medium text-gray-800">
-<<<<<<< HEAD
                                         {charge.sourceName || `Unknown (${charge.person_id || charge.vendor_id || 'No ID'})`}
-=======
-                                        {charge.sourceName || `Unknown (${charge.person_id || charge.vendor_id || 'No ID'})`}
->>>>>>> master
-                                      </p>
-                                      <p className="text-sm text-gray-600 mt-1">
-                                        Payment: {formatCurrency(charge.sourceTransaction?.amount || 0)}
                                       </p>
                                       <p className="text-xs text-gray-500 mt-1">
                                         {charge.sourceType === "vendor" ? "Vendor Payment" : "Person Advance"}

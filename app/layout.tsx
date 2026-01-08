@@ -1,16 +1,3 @@
-export const viewport = {
-  themeColor: "#2563eb",
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-};
-
-export const metadata: Metadata = {
-  title: "ঠিকাদারি হিসাব - Construction Contractor Accounting",
-  description:
-    "Complete accounting system for Bangladeshi construction contractors",
-  manifest: "/manifest.json",
-};
 import type { Metadata } from "next";
 import { Noto_Sans_Bengali } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
@@ -23,8 +10,6 @@ const notoSansBengali = Noto_Sans_Bengali({
   display: "swap",
 });
 
-<<<<<<< HEAD
-=======
 export const viewport = {
   themeColor: "#2563eb",
   width: "device-width",
@@ -32,22 +17,11 @@ export const viewport = {
   maximumScale: 1,
 };
 
->>>>>>> master
 export const metadata: Metadata = {
   title: "ঠিকাদারি হিসাব - Construction Contractor Accounting",
   description:
     "Complete accounting system for Bangladeshi construction contractors",
   manifest: "/manifest.json",
-<<<<<<< HEAD
-  themeColor: "#2563eb",
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
-=======
->>>>>>> master
 };
 
 export default function RootLayout({

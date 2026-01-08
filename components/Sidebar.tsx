@@ -203,6 +203,7 @@ export default function Sidebar({ tenders, userRole }: SidebarProps) {
           bg-white border-r border-slate-200
           flex flex-col
           transition-transform duration-300 ease-in-out
+          print:hidden
           ${
             isMobileOpen
               ? "translate-x-0"

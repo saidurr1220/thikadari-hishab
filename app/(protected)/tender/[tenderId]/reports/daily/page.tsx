@@ -476,36 +476,7 @@ export default function DailySheetPage({
 
             {/* Footer */}
             <div className="mt-8 pt-8 border-t-2 grid grid-cols-3 gap-8 text-center text-sm">
-                              <div>
-                               <p className="mb-8">প্রস্তুতকারী</p>
-                               <p className="border-t pt-2">স্বাক্ষর ও তারিখ</p>
-                             </div>
-                             <div>
-                               <p className="mb-8">পরীক্ষক</p>
-                               <p className="border-t pt-2">স্বাক্ষর ও তারিখ</p>
-                             </div>
-                             <div>
-                               <p className="mb-8">অনুমোদনকারী</p>
-                               <p className="border-t pt-2">স্বাক্ষর ও তারিখ</p>
               <div>
-<<<<<<< HEAD
-                <p className="mb-8">à¦ªà§à¦°à¦¸à§à¦¤à§à¦¤à¦•à¦¾à¦°à§€</p>
-                <p className="border-t pt-2">
-                  à¦¸à§à¦¬à¦¾à¦•à§à¦·à¦° à¦“ তারিখ
-                </p>
-              </div>
-              <div>
-                <p className="mb-8">à¦ªà¦°à§€à¦•à§à¦·à¦•</p>
-                <p className="border-t pt-2">
-                  à¦¸à§à¦¬à¦¾à¦•à§à¦·à¦° à¦“ তারিখ
-                </p>
-              </div>
-              <div>
-                <p className="mb-8">à¦…à¦¨à§à¦®à§‹à¦¦à¦¨à¦•à¦¾à¦°à§€</p>
-                <p className="border-t pt-2">
-                  à¦¸à§à¦¬à¦¾à¦•à§à¦·à¦° à¦“ তারিখ
-                </p>
-=======
                 <p className="mb-8">প্রস্তুতকারী</p>
                 <p className="border-t pt-2">স্বাক্ষর ও তারিখ</p>
               </div>
@@ -516,40 +487,43 @@ export default function DailySheetPage({
               <div>
                 <p className="mb-8">অনুমোদনকারী</p>
                 <p className="border-t pt-2">স্বাক্ষর ও তারিখ</p>
->>>>>>> master
               </div>
             </div>
           </div>
         )}
-      </div>
 
-      <style>{`
-        @media print {
-          .no-print {
-            display: none !important;
+        {/* Print Styles */}
+        <style jsx global>{`
+          @media print {
+            .no-print {
+              display: none !important;
+            }
+            .print-content {
+              page-break-inside: avoid;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+            th,
+            td {
+              padding: 0.5rem 1rem;
+              border: 1px solid #ddd;
+            }
+            th {
+              background-color: #f9f9f9;
+              font-weight: 600;
+            }
+            tfoot {
+              display: table-footer-group;
+            }
+            @page {
+              size: A4 portrait;
+              margin: 1.5cm;
+            }
           }
-          .print-content {
-            padding: 20px;
-          }
-          table {
-            page-break-inside: auto;
-          }
-          tr {
-            page-break-inside: avoid;
-            page-break-after: auto;
-          }
-          thead {
-            display: table-header-group;
-          }
-          tfoot {
-            display: table-footer-group;
-          }
-          @page {
-            size: A4 portrait;
-            margin: 1.5cm;
-          }
-        }
-      `}</style>
+        `}</style>
+      </div>
     </div>
   );
 }

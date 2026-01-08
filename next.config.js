@@ -1,11 +1,5 @@
-  reactStrictMode: true,
-  swcMinify: true,
-}
-
-module.exports = nextConfig
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-<<<<<<< HEAD
   images: {
     remotePatterns: [
       {
@@ -20,13 +14,8 @@ const nextConfig = {
       bodySizeLimit: '10mb',
     },
   },
+  reactStrictMode: true,
+  swcMinify: true,
 };
 
 module.exports = nextConfig;
-=======
-  reactStrictMode: true,
-  swcMinify: true,
-}
-
-module.exports = nextConfig
->>>>>>> master
