@@ -167,6 +167,14 @@
   tr {
     page-break-inside: avoid;
     page-break-after: auto;
+    display: table-row !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  tbody tr {
+    display: table-row !important;
+    visibility: visible !important;
   }
 
   thead {

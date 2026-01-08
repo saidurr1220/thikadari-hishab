@@ -71,27 +71,31 @@ export default async function LedgerSummaryPage({
   // Get person-wise advance and expense breakdown
   const { data: personAdvances } = await supabase
     .from("person_advances")
-    .select(`
+    .select(
+      `
       *,
       person:persons!person_advances_person_id_fkey (full_name)
-    `)
+    `
+    )
     .eq("tender_id", params.tenderId)
     .gte("advance_date", fromDate)
     .lte("advance_date", toDate);
 
   const { data: personExpenses } = await supabase
     .from("person_expenses")
-    .select(`
+    .select(
+      `
       *,
       person:persons!person_expenses_person_id_fkey (full_name)
-    `)
+    `
+    )
     .eq("tender_id", params.tenderId)
     .gte("expense_date", fromDate)
     .lte("expense_date", toDate);
 
   // Calculate person-wise summary
   const personSummary = new Map();
-  
+
   personAdvances?.forEach((adv: any) => {
     const personId = adv.person_id;
     const personName = adv.person?.full_name || "Unknown";
@@ -100,7 +104,7 @@ export default async function LedgerSummaryPage({
         name: personName,
         advances: 0,
         expenses: 0,
-        balance: 0
+        balance: 0,
       });
     }
     const summary = personSummary.get(personId);
@@ -116,7 +120,7 @@ export default async function LedgerSummaryPage({
         name: personName,
         advances: 0,
         expenses: 0,
-        balance: 0
+        balance: 0,
       });
     }
     const summary = personSummary.get(personId);
@@ -125,14 +129,13 @@ export default async function LedgerSummaryPage({
   });
 
   const personList = Array.from(personSummary.values());
+  const personListForPrint = personList;
 
   // Calculate totals
   const laborTotal =
     labor?.reduce(
       (sum, l) =>
-        sum +
-        Number(l.khoraki_total || 0) +
-        Number(l.wage_total || 0),
+        sum + Number(l.khoraki_total || 0) + Number(l.wage_total || 0),
       0
     ) || 0;
 
@@ -140,12 +143,14 @@ export default async function LedgerSummaryPage({
     materials?.reduce((sum, m) => sum + Number(m.total_amount || 0), 0) || 0;
 
   const vendorPurchasesTotal =
-    vendorPurchases?.reduce((sum, v) => sum + Number(v.total_amount || 0), 0) || 0;
+    vendorPurchases?.reduce((sum, v) => sum + Number(v.total_amount || 0), 0) ||
+    0;
 
   const activitiesTotal =
     activities?.reduce((sum, a) => sum + Number(a.amount || 0), 0) || 0;
 
-  const grandTotal = laborTotal + materialsTotal + vendorPurchasesTotal + activitiesTotal;
+  const grandTotal =
+    laborTotal + materialsTotal + vendorPurchasesTotal + activitiesTotal;
 
   // Group activities by category
   const activitiesByCategory = activities?.reduce((acc: any, a) => {
@@ -187,7 +192,11 @@ export default async function LedgerSummaryPage({
     {
       name: "ব্যক্তিগত অগ্রিম",
       name_en: "Personal Advances",
-      total: personAdvancesOnly?.reduce((sum, a) => sum + Number(a.amount || 0), 0) || 0,
+      total:
+        personAdvancesOnly?.reduce(
+          (sum, a) => sum + Number(a.amount || 0),
+          0
+        ) || 0,
       count: personAdvancesOnly?.length || 0,
       icon: "💰",
       color: "yellow",
@@ -247,19 +256,27 @@ export default async function LedgerSummaryPage({
                 <PrintButton />
               </div>
               <div className="text-right">
-                <p className="text-sm text-gray-600 print:text-black print:text-xs">সময়কাল</p>
+                <p className="text-sm text-gray-600 print:text-black print:text-xs">
+                  সময়কাল
+                </p>
                 <p className="font-semibold print:text-sm">
                   {formatDate(fromDate)} - {formatDate(toDate)}
                 </p>
-                <p className="text-sm text-gray-600 mt-1 print:text-black print:text-xs print:mt-0">{daysDiff} দিন</p>
+                <p className="text-sm text-gray-600 mt-1 print:text-black print:text-xs print:mt-0">
+                  {daysDiff} দিন
+                </p>
               </div>
             </div>
           </div>
 
           {/* Grand Total */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg p-6 text-white print:bg-gray-100 print:text-black print:border-2 print:border-gray-800 print:p-3 print:rounded-none">
-            <p className="text-sm opacity-90 mb-1 print:opacity-100 print:font-semibold print:text-xs">মোট খরচ</p>
-            <p className="text-4xl font-bold print:text-2xl">{formatCurrency(grandTotal)}</p>
+            <p className="text-sm opacity-90 mb-1 print:opacity-100 print:font-semibold print:text-xs">
+              মোট খরচ
+            </p>
+            <p className="text-4xl font-bold print:text-2xl">
+              {formatCurrency(grandTotal)}
+            </p>
             <p className="text-sm opacity-90 mt-2 print:opacity-100 print:text-xs print:mt-1">
               দৈনিক গড়: {formatCurrency(grandTotal / daysDiff)}
             </p>
@@ -326,21 +343,38 @@ export default async function LedgerSummaryPage({
               <table className="w-full print:text-xs">
                 <thead>
                   <tr className="border-b-2">
-                    <th className="text-left py-3 px-4 print:py-1 print:px-2">খাতার নাম</th>
-                    <th className="text-right py-3 px-4 print:py-1 print:px-2">এন্ট্রি সংখ্যা</th>
-                    <th className="text-right py-3 px-4 print:py-1 print:px-2">মোট টাকা</th>
-                    <th className="text-right py-3 px-4 print:py-1 print:px-2">শতাংশ</th>
-                    <th className="text-right py-3 px-4 print:py-1 print:px-2">দৈনিক গড়</th>
+                    <th className="text-left py-3 px-4 print:py-1 print:px-2">
+                      খাতার নাম
+                    </th>
+                    <th className="text-right py-3 px-4 print:py-1 print:px-2">
+                      এন্ট্রি সংখ্যা
+                    </th>
+                    <th className="text-right py-3 px-4 print:py-1 print:px-2">
+                      মোট টাকা
+                    </th>
+                    <th className="text-right py-3 px-4 print:py-1 print:px-2">
+                      শতাংশ
+                    </th>
+                    <th className="text-right py-3 px-4 print:py-1 print:px-2">
+                      দৈনিক গড়
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {khataList.map((khata, idx) => (
-                    <tr key={idx} className="border-b hover:bg-gray-50 print:hover:bg-transparent">
+                    <tr
+                      key={idx}
+                      className="border-b hover:bg-gray-50 print:hover:bg-transparent"
+                    >
                       <td className="py-3 px-4 print:py-1 print:px-2">
                         <div className="flex items-center gap-2 print:gap-1">
-                          <span className="text-xl print:text-base">{khata.icon}</span>
+                          <span className="text-xl print:text-base">
+                            {khata.icon}
+                          </span>
                           <div>
-                            <p className="font-semibold print:text-xs">{khata.name}</p>
+                            <p className="font-semibold print:text-xs">
+                              {khata.name}
+                            </p>
                             <p className="text-xs text-gray-500 print:hidden">
                               {khata.name_en}
                             </p>
@@ -371,7 +405,9 @@ export default async function LedgerSummaryPage({
                     <td className="text-right py-3 px-4 print:py-1 print:px-2">
                       {formatCurrency(grandTotal)}
                     </td>
-                    <td className="text-right py-3 px-4 print:py-1 print:px-2">100%</td>
+                    <td className="text-right py-3 px-4 print:py-1 print:px-2">
+                      100%
+                    </td>
                     <td className="text-right py-3 px-4 print:py-1 print:px-2">
                       {formatCurrency(grandTotal / daysDiff)}
                     </td>
@@ -386,23 +422,38 @@ export default async function LedgerSummaryPage({
         {personList.length > 0 && (
           <Card className="mb-6 print:shadow-none print:border-2 print:border-gray-800 print:rounded-none">
             <CardHeader className="print:pb-1 print:pt-2">
-              <CardTitle className="print:text-base">ব্যক্তিভিত্তিক অগ্রিম ও খরচ</CardTitle>
+              <CardTitle className="print:text-base">
+                ব্যক্তিভিত্তিক অগ্রিম ও খরচ
+              </CardTitle>
             </CardHeader>
             <CardContent className="print:p-2">
               <div className="overflow-x-auto">
                 <table className="w-full print:text-xs">
                   <thead>
                     <tr className="border-b-2">
-                      <th className="text-left py-3 px-4 print:py-1 print:px-2">ব্যক্তির নাম</th>
-                      <th className="text-right py-3 px-4 print:py-1 print:px-2">অগ্রিম</th>
-                      <th className="text-right py-3 px-4 print:py-1 print:px-2">খরচ</th>
-                      <th className="text-right py-3 px-4 print:py-1 print:px-2">ব্যালেন্স</th>
+                      <th className="text-left py-3 px-4 print:py-1 print:px-2">
+                        ব্যক্তির নাম
+                      </th>
+                      <th className="text-right py-3 px-4 print:py-1 print:px-2">
+                        অগ্রিম
+                      </th>
+                      <th className="text-right py-3 px-4 print:py-1 print:px-2">
+                        খরচ
+                      </th>
+                      <th className="text-right py-3 px-4 print:py-1 print:px-2">
+                        ব্যালেন্স
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {personList.map((person: any, idx: number) => (
-                      <tr key={idx} className="border-b hover:bg-gray-50 print:hover:bg-transparent">
-                        <td className="py-3 px-4 print:py-1 print:px-2 font-medium">{person.name}</td>
+                    {personListForPrint.map((person: any, idx: number) => (
+                      <tr
+                        key={idx}
+                        className="border-b hover:bg-gray-50 print:hover:bg-transparent"
+                      >
+                        <td className="py-3 px-4 print:py-1 print:px-2 font-medium">
+                          {person.name}
+                        </td>
                         <td className="text-right py-3 px-4 print:py-1 print:px-2 text-green-700 print:text-black">
                           {formatCurrency(person.advances)}
                         </td>
@@ -410,7 +461,13 @@ export default async function LedgerSummaryPage({
                           {formatCurrency(person.expenses)}
                         </td>
                         <td className="text-right py-3 px-4 print:py-1 print:px-2 font-semibold">
-                          <span className={person.balance >= 0 ? "text-green-700 print:text-black" : "text-red-700 print:text-black"}>
+                          <span
+                            className={
+                              person.balance >= 0
+                                ? "text-green-700 print:text-black"
+                                : "text-red-700 print:text-black"
+                            }
+                          >
                             {formatCurrency(Math.abs(person.balance))}
                             {person.balance < 0 ? " (পাবে)" : " (বাকি)"}
                           </span>
@@ -418,15 +475,32 @@ export default async function LedgerSummaryPage({
                       </tr>
                     ))}
                     <tr className="font-bold bg-gray-50 border-t-2 print:bg-transparent">
-                      <td className="py-3 px-4 print:py-1 print:px-2">সর্বমোট</td>
-                      <td className="text-right py-3 px-4 print:py-1 print:px-2">
-                        {formatCurrency(personList.reduce((sum: number, p: any) => sum + p.advances, 0))}
+                      <td className="py-3 px-4 print:py-1 print:px-2">
+                        সর্বমোট
                       </td>
                       <td className="text-right py-3 px-4 print:py-1 print:px-2">
-                        {formatCurrency(personList.reduce((sum: number, p: any) => sum + p.expenses, 0))}
+                        {formatCurrency(
+                          personListForPrint.reduce(
+                            (sum: number, p: any) => sum + p.advances,
+                            0
+                          )
+                        )}
                       </td>
                       <td className="text-right py-3 px-4 print:py-1 print:px-2">
-                        {formatCurrency(personList.reduce((sum: number, p: any) => sum + p.balance, 0))}
+                        {formatCurrency(
+                          personListForPrint.reduce(
+                            (sum: number, p: any) => sum + p.expenses,
+                            0
+                          )
+                        )}
+                      </td>
+                      <td className="text-right py-3 px-4 print:py-1 print:px-2">
+                        {formatCurrency(
+                          personListForPrint.reduce(
+                            (sum: number, p: any) => sum + p.balance,
+                            0
+                          )
+                        )}
                       </td>
                     </tr>
                   </tbody>
@@ -478,4 +552,3 @@ export default async function LedgerSummaryPage({
     </div>
   );
 }
-

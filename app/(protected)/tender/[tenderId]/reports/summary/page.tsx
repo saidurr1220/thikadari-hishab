@@ -84,6 +84,7 @@ export default function TenderSummaryPage({
   const [expenses, setExpenses] = useState<any[]>([]);
   const [rollupExpenses, setRollupExpenses] = useState<any[]>([]);
   const [balances, setBalances] = useState<any[]>([]);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -220,6 +221,19 @@ export default function TenderSummaryPage({
 
     loadData();
   }, [params.tenderId]);
+
+  useEffect(() => {
+    const beforePrint = () => setIsPrinting(true);
+    const afterPrint = () => setIsPrinting(false);
+    
+    window.addEventListener('beforeprint', beforePrint);
+    window.addEventListener('afterprint', afterPrint);
+    
+    return () => {
+      window.removeEventListener('beforeprint', beforePrint);
+      window.removeEventListener('afterprint', afterPrint);
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -359,9 +373,10 @@ export default function TenderSummaryPage({
   const maxActivities = 6;
   const maxBalances = 8;
 
-  const visibleVendors = sortedVendors.slice(0, maxVendors);
-  const visibleActivities = sortedActivities.slice(0, maxActivities);
-  const visibleBalances = sortedBalances.slice(0, maxBalances);
+  // For print, show all vendors/activities/balances
+  const visibleVendors = isPrinting ? sortedVendors : sortedVendors.slice(0, maxVendors);
+  const visibleActivities = isPrinting ? sortedActivities : sortedActivities.slice(0, maxActivities);
+  const visibleBalances = isPrinting ? sortedBalances : sortedBalances.slice(0, maxBalances);
 
   const laborPercent = grandTotal > 0 ? (laborTotal / grandTotal) * 100 : 0;
   const materialsPercent =
@@ -511,7 +526,8 @@ export default function TenderSummaryPage({
               </div>
             </div>
 
-            <div className="section">
+            {/* Screen version - limited vendors */}
+            <div className="section print:hidden">
               <h3 className="section-title text-sm font-semibold text-slate-700 mb-1.5">
                 ভেন্ডার ভিত্তিক হিসাব
               </h3>
@@ -574,6 +590,58 @@ export default function TenderSummaryPage({
               )}
             </div>
 
+            {/* Print version - all vendors */}
+            <div className="section hidden print:block">
+              <h3 className="section-title text-sm font-semibold text-slate-700 mb-1.5">
+                ভেন্ডার ভিত্তিক হিসাব
+              </h3>
+              <div className="vendor-table border border-slate-200 rounded-lg overflow-hidden">
+                <div className="vendor-header grid grid-cols-12 gap-1 sm:gap-2 px-2 sm:px-3 py-1 bg-slate-50 text-xs font-semibold text-slate-700">
+                  <div className="col-span-3">ভেন্ডার</div>
+                  <div className="col-span-7">আইটেম</div>
+                  <div className="col-span-2 text-right">মোট</div>
+                </div>
+                {sortedVendors.length > 0 ? (
+                  sortedVendors.map((v: any) => (
+                    <div
+                      key={v.name}
+                      className="vendor-row grid grid-cols-12 gap-1 sm:gap-2 px-2 sm:px-3 py-1 border-t border-slate-100"
+                    >
+                      <div className="col-span-3 text-xs sm:text-sm font-medium text-slate-800 break-words">
+                        {v.name}
+                      </div>
+                      <div className="col-span-7 text-[10px] sm:text-xs text-slate-600">
+                        <div className="space-y-0.5">
+                          {v.items.map((item: any, i: number) => {
+                            const quantityLabel =
+                              item.quantity && item.unit
+                                ? ` (${item.quantity} ${item.unit})`
+                                : item.quantity
+                                ? ` (${item.quantity})`
+                                : "";
+                            return (
+                              <div key={i} className="break-words">
+                                {item.item}
+                                {quantityLabel} -{" "}
+                                {formatCurrency(item.amount)}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="col-span-2 text-right text-xs sm:text-sm font-semibold text-slate-800">
+                        {formatCurrency(v.total)}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="px-3 py-4 text-sm text-slate-500">
+                    কোনো ভেন্ডার তথ্য পাওয়া যায়নি।
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="section grid gap-2 sm:gap-3 lg:grid-cols-2">
               <div className="rounded-lg border border-slate-200 p-2 sm:p-3">
                 <h3 className="section-title text-sm font-semibold text-slate-700 mb-1.5">
@@ -622,7 +690,7 @@ export default function TenderSummaryPage({
                 </h3>
                 {visibleBalances.length > 0 ? (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs sm:text-sm min-w-[300px]">
+                    <table className="w-full text-xs sm:text-sm min-w-[300px] person-balance-table">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-600">
                           <th className="text-left py-1">ব্যক্তি</th>
@@ -637,7 +705,7 @@ export default function TenderSummaryPage({
                             key={bal.person_id}
                             className="border-b border-slate-100"
                           >
-                            <td className="py-1 text-xs sm:text-sm font-medium text-slate-800">
+                            <td className="py-1 text-xs sm:text-sm font-medium text-slate-800 person-name">
                               {bal.person_name}
                             </td>
                             <td className="text-right py-1">
@@ -972,6 +1040,12 @@ export default function TenderSummaryPage({
 
             .space-y-0\\.5 > * + * {
               margin-top: 0.06rem !important;
+            }
+
+            /* Person Balance Table */
+            .person-balance-table .person-name {
+              font-size: 13pt !important;
+              font-weight: 600 !important;
             }
 
             /* General text size adjustments */
