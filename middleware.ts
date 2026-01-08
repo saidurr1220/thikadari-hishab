@@ -1,3 +1,42 @@
+    try {
+        const {
+            data: { user },
+        } = await supabase.auth.getUser();
+        let hasProfile = false;
+        if (user) {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('id, is_active')
+                .eq('id', user.id)
+                .maybeSingle();
+            hasProfile = !!profile?.id && profile?.is_active !== false;
+        }
+
+        // Protected routes - require authentication
+        const protectedPaths = ['/dashboard', '/tender', '/admin', '/settings'];
+        const isProtectedPath = protectedPaths.some((path) =>
+            request.nextUrl.pathname.startsWith(path)
+        );
+
+        if (isProtectedPath && (!user || !hasProfile)) {
+            const redirectUrl = new URL('/login', request.url);
+            redirectUrl.searchParams.set('redirect', request.nextUrl.pathname);
+            return NextResponse.redirect(redirectUrl);
+        }
+
+        // Auth routes - redirect to dashboard if already logged in
+        const authPaths = ['/login', '/signup'];
+        const isAuthPath = authPaths.some((path) =>
+            request.nextUrl.pathname.startsWith(path)
+        );
+
+        if (isAuthPath && user && hasProfile) {
+            return NextResponse.redirect(new URL('/dashboard', request.url));
+        }
+    } catch (error) {
+        console.error('Error in middleware:', error);
+        // In case of any error, just continue
+    }
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
@@ -54,6 +93,7 @@ export async function middleware(request: NextRequest) {
         }
     );
 
+<<<<<<< HEAD
     const {
         data: { user },
     } = await supabase.auth.getUser();
@@ -87,6 +127,46 @@ export async function middleware(request: NextRequest) {
 
     if (isAuthPath && user && hasProfile) {
         return NextResponse.redirect(new URL('/dashboard', request.url));
+=======
+    try {
+        const {
+            data: { user },
+        } = await supabase.auth.getUser();
+        let hasProfile = false;
+        if (user) {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('id, is_active')
+                .eq('id', user.id)
+                .maybeSingle();
+            hasProfile = !!profile?.id && profile?.is_active !== false;
+        }
+
+        // Protected routes - require authentication
+        const protectedPaths = ['/dashboard', '/tender', '/admin', '/settings'];
+        const isProtectedPath = protectedPaths.some((path) =>
+            request.nextUrl.pathname.startsWith(path)
+        );
+
+        if (isProtectedPath && (!user || !hasProfile)) {
+            const redirectUrl = new URL('/login', request.url);
+            redirectUrl.searchParams.set('redirect', request.nextUrl.pathname);
+            return NextResponse.redirect(redirectUrl);
+        }
+
+        // Auth routes - redirect to dashboard if already logged in
+        const authPaths = ['/login', '/signup'];
+        const isAuthPath = authPaths.some((path) =>
+            request.nextUrl.pathname.startsWith(path)
+        );
+
+        if (isAuthPath && user && hasProfile) {
+            return NextResponse.redirect(new URL('/dashboard', request.url));
+        }
+    } catch (error) {
+        console.error('Error in middleware:', error);
+        // In case of any error, just continue
+>>>>>>> master
     }
 
     return response;
