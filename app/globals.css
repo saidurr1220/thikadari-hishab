@@ -1,0 +1,289 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+}
+
+/* Print Styles */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0.8cm 0.7cm;
+  }
+
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    font-size: 8pt;
+    line-height: 1.1;
+  }
+
+  /* Hide sidebar and hamburger menu */
+  aside,
+  nav,
+  .sidebar,
+  [class*="sidebar"],
+  button[aria-label*="menu"],
+  .no-print {
+    display: none !important;
+  }
+
+  .print-break-before {
+    page-break-before: always;
+  }
+
+  .print-break-after {
+    page-break-after: always;
+  }
+
+  .print-avoid-break {
+    page-break-inside: avoid;
+  }
+
+  /* Ensure content fits on one page */
+  .min-h-screen {
+    min-height: auto;
+  }
+
+  .bg-gray-50 {
+    background: white !important;
+  }
+
+  .max-w-7xl {
+    max-width: 100%;
+  }
+
+  /* Compact spacing for print */
+  .px-4 {
+    padding-left: 0.3rem;
+    padding-right: 0.3rem;
+  }
+
+  .mb-8, .mb-6 {
+    margin-bottom: 0.3rem !important;
+  }
+
+  .py-8 {
+    padding-top: 0.2rem !important;
+    padding-bottom: 0.2rem !important;
+  }
+
+  /* Font sizes - compact for fitting on one page */
+  h1 {
+    font-size: 12pt !important;
+    margin-bottom: 0.15rem !important;
+  }
+
+  h2, .text-3xl {
+    font-size: 10pt !important;
+  }
+
+  .text-4xl {
+    font-size: 14pt !important;
+  }
+
+  .text-2xl {
+    font-size: 9pt !important;
+  }
+
+  .text-xl {
+    font-size: 9pt !important;
+  }
+
+  .text-base {
+    font-size: 8pt !important;
+  }
+
+  .text-sm {
+    font-size: 7pt !important;
+  }
+
+  .text-xs {
+    font-size: 6pt !important;
+  }
+
+  /* Table styling */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+    display: table-row !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  tbody tr {
+    display: table-row !important;
+    visibility: visible !important;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  thead tr {
+    background-color: #f3f4f6 !important;
+  }
+
+  th,
+  td {
+    border: 1px solid #000;
+    padding: 4px 8px;
+    text-align: left;
+  }
+
+  th {
+    background-color: #f0f0f0 !important;
+    font-weight: bold;
+  }
+
+  /* Ensure borders print */
+  .border, .border-b, .border-t-2, .border-b-2 {
+    border-color: #000 !important;
+  }
+
+  /* Card styling for print */
+  .rounded-xl, .rounded-lg {
+    border-radius: 0 !important;
+  }
+
+  .shadow-sm, .shadow-lg {
+    box-shadow: none !important;
+  }
+
+  /* Print-specific utility classes */
+  .print\:text-black {
+    color: #000 !important;
+  }
+
+  .print\:bg-transparent {
+    background-color: transparent !important;
+  }
+
+  .print\:border-2 {
+    border-width: 2px !important;
+  }
+
+  .print\:border-gray-800 {
+    border-color: #1f2937 !important;
+  }
+
+  .print\:shadow-none {
+    box-shadow: none !important;
+  }
+
+  .print\:rounded-none {
+    border-radius: 0 !important;
+  }
+
+  .print\:hover\:bg-transparent:hover {
+    background-color: transparent !important;
+  }
+}
+
+/* Print Landscape for specific reports */
+@media print {
+  .print-landscape {
+    size: A4 landscape;
+  }
+}
+
+/* Print Portrait for specific reports */
+@media print {
+  .print-portrait {
+    size: A4 portrait;
+  }
+}
+
+/* Bangla Font */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap');
+
+body {
+  font-family: 'Noto Sans Bengali', system-ui, -apple-system, sans-serif;
+}
+
+/* Mobile Bottom Navigation Safe Area */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .bottom-nav {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary));
+}
