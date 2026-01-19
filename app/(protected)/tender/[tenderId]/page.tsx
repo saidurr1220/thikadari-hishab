@@ -314,13 +314,13 @@ export default async function TenderDashboardPage({
                       <span className="truncate">Purchases</span>
                     </Button>
                   </Link>
-                  <Link href={`/tender/${params.tenderId}/expenses/overview`}>
+                  <Link href={`/tender/${params.tenderId}/reports/summary`}>
                     <Button
                       variant="outline"
                       className="w-full gap-1 sm:gap-2 h-8 sm:h-9 md:h-10 text-xs sm:text-sm border border-slate-200 sm:border-2 hover:bg-slate-50 hover:border-slate-300 transition-all px-2 sm:px-3"
                     >
-                      <Coins className="h-3 w-3 sm:h-4 sm:w-4 text-slate-600 flex-shrink-0" />
-                      <span className="truncate">Overview</span>
+                      <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 text-slate-600 flex-shrink-0" />
+                      <span className="truncate">Reports</span>
                     </Button>
                   </Link>
                 </div>
@@ -430,19 +430,19 @@ export default async function TenderDashboardPage({
               </Card>
             </Link>
 
-            <Link href={`/tender/${params.tenderId}/expenses/overview`}>
-              <Card className="group cursor-pointer bg-white border-slate-200 shadow-md transition-all hover:-translate-y-1 hover:shadow-lg hover:border-slate-300">
+            <Link href={`/tender/${params.tenderId}/reports/summary`}>
+              <Card className="group cursor-pointer bg-white border-slate-200 shadow-md transition-all hover:-translate-y-1 hover:shadow-lg hover:border-teal-300">
                 <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-sm text-slate-900 group-hover:text-slate-600 transition-colors">
-                    <div className="p-1.5 bg-slate-100 rounded-lg group-hover:bg-slate-200 transition-colors">
-                      <FileText className="h-4 w-4 text-slate-600" />
+                  <CardTitle className="flex items-center gap-2 text-sm text-slate-900 group-hover:text-teal-600 transition-colors">
+                    <div className="p-1.5 bg-teal-100 rounded-lg group-hover:bg-teal-200 transition-colors">
+                      <BarChart3 className="h-4 w-4 text-teal-600" />
                     </div>
-                    Expense Overview
+                    Reports & Summary
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-xs text-slate-600 leading-relaxed">
-                    Overview of all project expenses.
+                    Complete financial reports and analytics.
                   </p>
                 </CardContent>
               </Card>

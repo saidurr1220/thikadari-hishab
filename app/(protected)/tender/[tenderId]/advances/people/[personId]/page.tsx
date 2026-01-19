@@ -31,7 +31,7 @@ type PersonInfo = {
 type Transaction = {
   id: string;
   date: string;
-  type: "advance" | "expense";
+  type: "advance" | "expense" | "mfs_charge";
   amount: number;
   description: string;
   payment_method?: string;
@@ -51,6 +51,7 @@ export default function PersonAdvanceLedgerPage({
   const [person, setPerson] = useState<PersonInfo | null>(null);
   const [advances, setAdvances] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
+  const [mfsCharges, setMfsCharges] = useState<any[]>([]);
   const [error, setError] = useState("");
 
   const [showAdvanceForm, setShowAdvanceForm] = useState(false);
@@ -116,19 +117,34 @@ export default function PersonAdvanceLedgerPage({
       notes: e.notes,
     }));
 
+    // Add MFS charges as separate transaction type
+    const mfsTxn: Transaction[] = mfsCharges.map((c) => ({
+      id: c.id,
+      date: c.expense_date,
+      type: "mfs_charge" as const,
+      amount: Number(c.amount),
+      description: c.description || "MFS Transaction Charge",
+      payment_method: "mfs",
+      notes: c.notes,
+      isImplied: c.isImplied, // Track if this is a calculated charge
+    } as any));
+
     // Sort by date (oldest first) to calculate running balance
-    const sorted = [...advTxn, ...expTxn].sort(
+    const sorted = [...advTxn, ...expTxn, ...mfsTxn].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
     );
 
     // Calculate running balance for each transaction
+    // MFS charges do NOT affect the person's balance
     let runningBalance = 0;
     const withBalance = sorted.map((txn) => {
       if (txn.type === "advance") {
         runningBalance += txn.amount;
-      } else {
+      } else if (txn.type === "expense") {
+        // Only regular expenses deduct from balance, NOT MFS charges
         runningBalance -= txn.amount;
       }
+      // MFS charges don't change the balance
       return {
         ...txn,
         balance: runningBalance,
@@ -137,7 +153,7 @@ export default function PersonAdvanceLedgerPage({
 
     // Return in reverse order (newest first) for display
     return withBalance.reverse();
-  }, [advances, expenses]);
+  }, [advances, expenses, mfsCharges]);
 
   const stats = useMemo(() => {
     const totalAdvances = advances.reduce(
@@ -148,15 +164,23 @@ export default function PersonAdvanceLedgerPage({
       (sum, e) => sum + Number(e.amount || 0),
       0,
     );
-    const balance = totalAdvances - totalExpenses;
+    const totalMfsCharges = mfsCharges.reduce(
+      (sum, c) => sum + Number(c.amount || 0),
+      0,
+    );
+    const balance = totalAdvances - totalExpenses; // MFS charges don't affect person's balance
+    const actualCost = totalAdvances + totalMfsCharges; // Your actual cost including MFS
     return {
       totalAdvances,
-      totalExpenses,
+      totalExpenses, // Only person expenses, not MFS charges
+      totalMfsCharges,
+      actualCost,
       balance,
       advanceCount: advances.length,
       expenseCount: expenses.length,
+      mfsChargeCount: mfsCharges.length,
     };
-  }, [advances, expenses]);
+  }, [advances, expenses, mfsCharges]);
 
   useEffect(() => {
     loadAll();
@@ -265,8 +289,66 @@ export default function PersonAdvanceLedgerPage({
       .or(`user_id.eq.${params.personId},person_id.eq.${params.personId}`)
       .order("expense_date", { ascending: false });
 
+    // Load MFS charges related to this person's advances
+    // MFS charges are stored in activity_expenses with description like "[MFS CHARGE] Advance to Person Name"
+    const personName = profile?.full_name || personRow?.full_name || "";
+    const { data: mfsChargeData } = await supabase
+      .from("activity_expenses")
+      .select("*")
+      .eq("tender_id", params.tenderId)
+      .like("description", `%${personName}%`)
+      .like("description", "[MFS CHARGE]%")
+      .order("expense_date", { ascending: false });
+
+    // For existing MFS advances that don't have charges yet, calculate implied charges
+    const existingMfsCharges: any[] = [];
+    if (advanceData) {
+      for (const advance of advanceData) {
+        if (advance.payment_method === "mfs") {
+          // Check if this advance already has a charge
+          const amount = Number(advance.amount);
+          const hasCharge = mfsChargeData?.some((charge) => {
+            // Match by reference number (most reliable)
+            if (advance.payment_ref && charge.payment_ref === advance.payment_ref) {
+              return true;
+            }
+            // Match by description containing the exact amount
+            if (charge.description?.includes(`৳${amount.toFixed(2)}`)) {
+              return true;
+            }
+            // Match by date and similar amount (within 1% tolerance for rounding)
+            const chargeDate = new Date(charge.expense_date).toDateString();
+            const advanceDate = new Date(advance.advance_date).toDateString();
+            const expectedCharge = (amount * 0.0185) + 10;
+            const chargeDiff = Math.abs(Number(charge.amount) - expectedCharge);
+            if (chargeDate === advanceDate && chargeDiff < 1) {
+              return true;
+            }
+            return false;
+          });
+          
+          if (!hasCharge) {
+            // Calculate the implied MFS charge
+            const mfsCharge = (amount * 0.0185) + 10;
+            
+            existingMfsCharges.push({
+              id: `implied-${advance.id}`,
+              expense_date: advance.advance_date,
+              amount: mfsCharge,
+              description: `[MFS CHARGE] Advance to ${personName} (৳${amount.toFixed(2)})`,
+              notes: `Auto-calculated: 1.85% + ৳10 MFS charge (Not yet recorded in database)`,
+              payment_method: "mfs",
+              payment_ref: advance.payment_ref,
+              isImplied: true, // Mark as implied/calculated
+            });
+          }
+        }
+      }
+    }
+
     setAdvances(advanceData || []);
     setExpenses(expenseData || []);
+    setMfsCharges([...(mfsChargeData || []), ...existingMfsCharges]);
     setLoading(false);
   };
 
@@ -505,6 +587,44 @@ export default function PersonAdvanceLedgerPage({
     }
   };
 
+  const saveImpliedMfsCharge = async (txn: any) => {
+    if (!txn.isImplied) return;
+    
+    setSubmitting(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) throw new Error("Not authenticated");
+
+      // Save the implied charge to activity_expenses
+      const { error: insertError } = await supabase
+        .from("activity_expenses")
+        .insert({
+          tender_id: params.tenderId,
+          expense_date: txn.date,
+          description: txn.description,
+          amount: txn.amount,
+          payment_method: "mfs",
+          payment_ref: txn.payment_ref || null,
+          notes: `Auto-generated: 1.85% + ৳10 MFS charge`,
+          created_by: userId,
+        });
+
+      if (insertError) throw insertError;
+
+      // Update the state immediately to remove isImplied flag
+      setMfsCharges((prev) => 
+        prev.map((c: any) => 
+          c.id === txn.id ? { ...c, isImplied: false } : c
+        )
+      );
+    } catch (err: any) {
+      alert("Error saving MFS charge: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const addBulkExpenseItem = () => {
     setBulkExpenseItems([
       ...bulkExpenseItems,
@@ -527,6 +647,54 @@ export default function PersonAdvanceLedgerPage({
     updated[index][field] = value;
     setBulkExpenseItems(updated);
   };
+
+  const saveAllImpliedCharges = async () => {
+    const impliedCharges = mfsCharges.filter((c: any) => c.isImplied);
+    if (impliedCharges.length === 0) return;
+
+    if (!confirm(`Save ${impliedCharges.length} calculated MFS charge(s) to database?`)) {
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) throw new Error("Not authenticated");
+
+      const entries = impliedCharges.map((charge: any) => ({
+        tender_id: params.tenderId,
+        expense_date: charge.expense_date,
+        description: charge.description,
+        amount: charge.amount,
+        payment_method: "mfs",
+        payment_ref: charge.payment_ref || null,
+        notes: `Auto-generated: 1.85% + ৳10 MFS charge`,
+        created_by: userId,
+      }));
+
+      const { error: insertError } = await supabase
+        .from("activity_expenses")
+        .insert(entries);
+
+      if (insertError) throw insertError;
+
+      // Update state to mark all as saved
+      setMfsCharges((prev) => 
+        prev.map((c: any) => 
+          c.isImplied ? { ...c, isImplied: false } : c
+        )
+      );
+
+      alert(`Successfully saved ${impliedCharges.length} MFS charge(s)`);
+    } catch (err: any) {
+      alert("Error saving MFS charges: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const impliedChargesCount = mfsCharges.filter((c: any) => c.isImplied).length;
 
   if (loading) {
     return (
@@ -608,7 +776,7 @@ export default function PersonAdvanceLedgerPage({
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
           <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium opacity-90 flex items-center gap-2">
@@ -622,6 +790,40 @@ export default function PersonAdvanceLedgerPage({
               </div>
               <p className="text-xs opacity-80 mt-1">
                 {stats.advanceCount} transactions
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-orange-500 to-orange-600 text-white">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium opacity-90 flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />
+                MFS Charges
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {formatCurrency(stats.totalMfsCharges)}
+              </div>
+              <p className="text-xs opacity-80 mt-1">
+                {stats.mfsChargeCount} charges
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium opacity-90 flex items-center gap-2">
+                <DollarSign className="h-4 w-4" />
+                Actual Cost
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {formatCurrency(stats.actualCost)}
+              </div>
+              <p className="text-xs opacity-80 mt-1">
+                Including MFS
               </p>
             </CardContent>
           </Card>
@@ -857,6 +1059,55 @@ export default function PersonAdvanceLedgerPage({
                     disabled={submitting}
                   />
                 </div>
+
+                {/* Summary Section - Only show when MFS charge is included */}
+                {advanceForm.method === "mfs" &&
+                  includeMfsCharge &&
+                  mfsCharge > 0 &&
+                  parseFloat(advanceForm.amount) > 0 && (
+                    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-lg p-4">
+                      <h4 className="font-bold text-indigo-900 mb-3 flex items-center gap-2">
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                        সারসংক্ষেপ
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between items-center p-2 bg-white rounded">
+                          <span className="text-gray-700">
+                            ব্যক্তি যা পাবেন:
+                          </span>
+                          <span className="font-bold text-green-600 text-lg">
+                            ৳{parseFloat(advanceForm.amount).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center p-2 bg-white rounded">
+                          <span className="text-gray-700">MFS চার্জ:</span>
+                          <span className="font-semibold text-orange-600">
+                            ৳{mfsCharge.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center p-2 bg-indigo-100 rounded border-2 border-indigo-400">
+                          <span className="font-bold text-indigo-900">
+                            আপনার মোট খরচ:
+                          </span>
+                          <span className="font-bold text-indigo-900 text-xl">
+                            ৳{totalWithCharge.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                 <div className="flex gap-2 pt-4">
                   <Button
@@ -1279,10 +1530,32 @@ export default function PersonAdvanceLedgerPage({
         {/* Transactions Table */}
         <Card className="shadow-lg">
           <CardHeader className="border-b bg-white">
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-slate-600" />
-              Transaction History
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-slate-600" />
+                  Transaction History
+                </CardTitle>
+                <p className="text-xs text-slate-600 mt-2">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 text-xs font-medium mr-2">
+                    <CreditCard className="h-3 w-3" />
+                    MFS Charges
+                  </span>
+                  are your transaction costs (1.85% + ৳10) and do not affect the person's balance.
+                </p>
+              </div>
+              {impliedChargesCount > 0 && (
+                <Button
+                  onClick={saveAllImpliedCharges}
+                  disabled={submitting}
+                  size="sm"
+                  className="gap-2 bg-orange-500 hover:bg-orange-600"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  Save {impliedChargesCount} Calculated Charge{impliedChargesCount > 1 ? 's' : ''}
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             {transactions.length === 0 ? (
@@ -1337,15 +1610,25 @@ export default function PersonAdvanceLedgerPage({
                                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                                   txn.type === "advance"
                                     ? "bg-emerald-100 text-emerald-800"
-                                    : "bg-red-100 text-red-800"
+                                    : txn.type === "mfs_charge"
+                                      ? (txn as any).isImplied 
+                                        ? "bg-yellow-100 text-yellow-800 border border-yellow-300"
+                                        : "bg-orange-100 text-orange-800"
+                                      : "bg-red-100 text-red-800"
                                 }`}
                               >
                                 {txn.type === "advance" ? (
                                   <TrendingUp className="h-3 w-3" />
+                                ) : txn.type === "mfs_charge" ? (
+                                  <CreditCard className="h-3 w-3" />
                                 ) : (
                                   <TrendingDown className="h-3 w-3" />
                                 )}
-                                {txn.type === "advance" ? "Advance" : "Expense"}
+                                {txn.type === "advance"
+                                  ? "Advance"
+                                  : txn.type === "mfs_charge"
+                                    ? (txn as any).isImplied ? "MFS Charge (Calculated)" : "MFS Charge"
+                                    : "Expense"}
                               </span>
                               <p className="font-medium">{txn.description}</p>
                             </div>
@@ -1372,7 +1655,9 @@ export default function PersonAdvanceLedgerPage({
                         <td className="px-4 py-3 text-sm font-semibold text-right text-red-600 whitespace-nowrap">
                           {txn.type === "expense"
                             ? formatCurrency(txn.amount)
-                            : "-"}
+                            : txn.type === "mfs_charge"
+                              ? <span className="text-orange-600">{formatCurrency(txn.amount)}</span>
+                              : "-"}
                         </td>
                         <td
                           className={`px-4 py-3 text-sm font-bold text-right whitespace-nowrap ${
@@ -1391,19 +1676,34 @@ export default function PersonAdvanceLedgerPage({
                           )}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <EntryActions
-                            entryId={txn.id}
-                            tableName={
-                              txn.type === "advance"
-                                ? "person_advances"
-                                : "person_expenses"
-                            }
-                            editUrl={
-                              txn.type === "advance"
-                                ? `/tender/${params.tenderId}/advances/edit/${txn.id}`
-                                : `/tender/${params.tenderId}/expenses/edit/${txn.id}`
-                            }
-                          />
+                          {txn.type === "mfs_charge" ? (
+                            (txn as any).isImplied ? (
+                              <Button
+                                onClick={() => saveImpliedMfsCharge(txn)}
+                                disabled={submitting}
+                                size="sm"
+                                className="text-xs bg-orange-500 hover:bg-orange-600"
+                              >
+                                {submitting ? "Saving..." : "Save to DB"}
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-slate-500 italic">Auto-generated</span>
+                            )
+                          ) : (
+                            <EntryActions
+                              entryId={txn.id}
+                              tableName={
+                                txn.type === "advance"
+                                  ? "person_advances"
+                                  : "person_expenses"
+                              }
+                              editUrl={
+                                txn.type === "advance"
+                                  ? `/tender/${params.tenderId}/advances/edit/${txn.id}`
+                                  : `/tender/${params.tenderId}/expenses/edit/${txn.id}`
+                              }
+                            />
+                          )}
                         </td>
                       </tr>
                     ))}
