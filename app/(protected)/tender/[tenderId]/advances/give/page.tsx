@@ -28,6 +28,7 @@ export default function GiveAdvancePage({
   const [mfsCharge, setMfsCharge] = useState(0);
   const [totalWithCharge, setTotalWithCharge] = useState(0);
   const [personKey, setPersonKey] = useState("");
+  const [includeMfsCharge, setIncludeMfsCharge] = useState(false);
 
   const [formData, setFormData] = useState({
     advanceDate: new Date().toISOString().split("T")[0],
@@ -55,7 +56,7 @@ export default function GiveAdvancePage({
         user_id,
         role,
         profiles (id, full_name)
-      `
+      `,
       )
       .eq("tender_id", params.tenderId)
       .not("user_id", "is", null);
@@ -68,7 +69,7 @@ export default function GiveAdvancePage({
         person_id,
         role,
         persons (id, full_name)
-      `
+      `,
       )
       .eq("tender_id", params.tenderId)
       .not("person_id", "is", null);
@@ -178,7 +179,7 @@ export default function GiveAdvancePage({
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >
+    >,
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -220,6 +221,8 @@ export default function GiveAdvancePage({
       const amount = parseFloat(formData.amount);
       if (amount > 0) {
         const isAuthUser = formData.personType === "user";
+
+        // Person advance with actual amount (not including charge)
         const { error: insertError } = await supabase
           .from("person_advances")
           .insert({
@@ -239,6 +242,28 @@ export default function GiveAdvancePage({
           setError(insertError.message);
           setLoading(false);
           return;
+        }
+
+        // If MFS charge is included, add it to activity_expenses (not person_expenses)
+        // This is YOUR cost, not deducted from the recipient's balance
+        if (formData.method === "mfs" && includeMfsCharge && mfsCharge > 0) {
+          const { error: chargeError } = await supabase
+            .from("activity_expenses")
+            .insert({
+              tender_id: params.tenderId,
+              expense_date: formData.advanceDate,
+              description: `[MFS CHARGE] Advance payment (৳${amount.toFixed(2)})`,
+              amount: mfsCharge,
+              payment_method: formData.method,
+              payment_ref: formData.reference || null,
+              notes: `Auto-generated: 1.85% + ৳10 MFS charge`,
+              created_by: user.id,
+            });
+
+          if (chargeError) {
+            console.error("Failed to record MFS charge:", chargeError);
+            // Don't throw - advance was successful, just log the error
+          }
         }
       }
 
@@ -380,8 +405,8 @@ export default function GiveAdvancePage({
                         currentBalance > 0
                           ? "text-green-600"
                           : currentBalance < 0
-                          ? "text-red-600"
-                          : "text-gray-600"
+                            ? "text-red-600"
+                            : "text-gray-600"
                       }`}
                     >
                       {formatCurrency(Math.abs(currentBalance))}
@@ -389,8 +414,8 @@ export default function GiveAdvancePage({
                     {currentBalance > 0
                       ? " (বাকি)"
                       : currentBalance < 0
-                      ? " (পাওনা)"
-                      : ""}
+                        ? " (পাওনা)"
+                        : ""}
                   </p>
                 )}
               </div>
@@ -430,6 +455,48 @@ export default function GiveAdvancePage({
                       <option value="mfs">{labels.mfs}</option>
                     </select>
                   </div>
+
+                  {formData.method === "mfs" && (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
+                        <div className="flex items-start gap-3 mb-2">
+                          <input
+                            type="checkbox"
+                            id="includeMfsCharge"
+                            checked={includeMfsCharge}
+                            onChange={(e) =>
+                              setIncludeMfsCharge(e.target.checked)
+                            }
+                            className="w-4 h-4 mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            disabled={loading}
+                          />
+                          <div className="flex-1">
+                            <label
+                              htmlFor="includeMfsCharge"
+                              className="cursor-pointer text-sm font-semibold text-gray-900 block"
+                            >
+                              MFS চার্জ অন্তর্ভুক্ত করুন (1.85% + ৳10)
+                            </label>
+                            <p className="text-xs text-gray-600 mt-1">
+                              ব্যক্তি সম্পূর্ণ টাকা পাবেন। MFS চার্জ আলাদাভাবে
+                              আপনার খরচ হিসেবে রেকর্ড হবে।
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {includeMfsCharge && (
+                        <MFSChargeCalculator
+                          amount={formData.amount}
+                          paymentMethod={formData.method}
+                          onChargeCalculated={(charge, total) => {
+                            setMfsCharge(charge);
+                            setTotalWithCharge(total);
+                          }}
+                        />
+                      )}
+                    </div>
+                  )}
 
                   <div>
                     <Label htmlFor="reference">রেফারেন্স</Label>

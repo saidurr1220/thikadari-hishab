@@ -57,12 +57,22 @@ export default async function PeopleAdvanceHubPage({
         total_advances: 0,
         total_expenses: 0,
         balance: 0,
+        actual_cost: 0, // New: Your actual expense including MFS charges
       });
     }
     
     const balance = balanceMap.get(personId);
-    balance.total_advances += Number(adv.amount || 0);
-    balance.balance += Number(adv.amount || 0);
+    const advanceAmount = Number(adv.amount || 0);
+    balance.total_advances += advanceAmount;
+    balance.balance += advanceAmount;
+    
+    // Calculate actual cost (including MFS charge if applicable)
+    let actualCost = advanceAmount;
+    if (adv.payment_method === "mfs") {
+      const mfsCharge = advanceAmount * 0.0185 + 10;
+      actualCost += mfsCharge;
+    }
+    balance.actual_cost += actualCost;
   });
 
   personExpenses?.forEach((exp: any) => {
@@ -78,12 +88,15 @@ export default async function PeopleAdvanceHubPage({
         total_advances: 0,
         total_expenses: 0,
         balance: 0,
+        actual_cost: 0,
       });
     }
     
     const balance = balanceMap.get(personId);
-    balance.total_expenses += Number(exp.amount || 0);
-    balance.balance -= Number(exp.amount || 0);
+    const expenseAmount = Number(exp.amount || 0);
+    balance.total_expenses += expenseAmount;
+    balance.balance -= expenseAmount;
+    balance.actual_cost += expenseAmount;
   });
 
   const balances = Array.from(balanceMap.values());
@@ -95,6 +108,11 @@ export default async function PeopleAdvanceHubPage({
 
   const totalExpenses = balances?.reduce(
     (sum: number, b: any) => sum + Number(b.total_expenses || 0),
+    0
+  ) || 0;
+
+  const totalActualCost = balances?.reduce(
+    (sum: number, b: any) => sum + Number(b.actual_cost || 0),
     0
   ) || 0;
 
@@ -143,6 +161,23 @@ export default async function PeopleAdvanceHubPage({
                 <div className="text-lg sm:text-xl md:text-2xl font-bold text-emerald-600 break-all">
                   {formatCurrency(totalAdvances)}
                 </div>
+                <p className="text-xs text-slate-500 mt-1">Person balance</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/80 border-slate-200/70 shadow-sm">
+              <CardHeader className="pb-2 sm:pb-3">
+                <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1.5 sm:gap-2">
+                  <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline">Actual Cost</span>
+                  <span className="xs:hidden">Cost</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-lg sm:text-xl md:text-2xl font-bold text-orange-600 break-all">
+                  {formatCurrency(totalActualCost)}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">With MFS charges</p>
               </CardContent>
             </Card>
 
@@ -158,29 +193,7 @@ export default async function PeopleAdvanceHubPage({
                 <div className="text-lg sm:text-xl md:text-2xl font-bold text-red-600 break-all">
                   {formatCurrency(totalExpenses)}
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/80 border-slate-200/70 shadow-sm">
-              <CardHeader className="pb-2 sm:pb-3">
-                <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1.5 sm:gap-2">
-                  <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
-                  <span className="hidden xs:inline">Net Balance</span>
-                  <span className="xs:hidden">Balance</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className={`text-lg sm:text-xl md:text-2xl font-bold break-all ${
-                    netBalance > 0
-                      ? "text-blue-600"
-                      : netBalance < 0
-                      ? "text-orange-600"
-                      : "text-slate-600"
-                  }`}
-                >
-                  {formatCurrency(Math.abs(netBalance))}
-                </div>
+                <p className="text-xs text-slate-500 mt-1">Person spent</p>
               </CardContent>
             </Card>
 
@@ -253,6 +266,12 @@ export default async function PeopleAdvanceHubPage({
                                     <TrendingDown className="h-3 w-3 text-red-600" />
                                     {formatCurrency(bal.total_expenses)}
                                   </span>
+                                  {bal.actual_cost !== bal.total_advances && (
+                                    <span className="flex items-center gap-1 text-orange-600 font-medium">
+                                      <DollarSign className="h-3 w-3" />
+                                      {formatCurrency(bal.actual_cost)} cost
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </div>

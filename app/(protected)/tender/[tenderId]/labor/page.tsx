@@ -38,6 +38,12 @@ export default async function LaborListPage({
     .order("entry_date", { ascending: false })
     .limit(50);
 
+  // Get all advances given to persons (including subcontractors)
+  const { data: advances } = await supabase
+    .from("person_advances")
+    .select("amount, payment_method")
+    .eq("tender_id", params.tenderId);
+
   const calcBase = (entry: any) =>
     Number(entry.khoraki_total || 0) + Number(entry.wage_total || 0);
 
@@ -53,6 +59,17 @@ export default async function LaborListPage({
   const contractTotal =
     contractEntries?.reduce((sum, l) => sum + calcBase(l), 0) || 0;
   const combinedTotal = dailyTotal + contractTotal;
+
+  // Calculate MFS charges from advances
+  let mfsChargesTotal = 0;
+  advances?.forEach((adv: any) => {
+    if (adv.payment_method === "mfs") {
+      const amount = Number(adv.amount || 0);
+      mfsChargesTotal += amount * 0.0185 + 10;
+    }
+  });
+
+  const totalWithCharges = combinedTotal + mfsChargesTotal;
 
   const activeTab = searchParams?.tab === "daily" ? "daily" : "contract";
   const activeEntries =
@@ -121,61 +138,86 @@ export default async function LaborListPage({
         </header>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
           <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0 shadow-lg hover:shadow-xl transition-all">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-blue-100 flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Daily Labor (Expense)
+            <CardHeader className="pb-2 sm:pb-3">
+              <CardTitle className="text-xs sm:text-sm font-medium text-blue-100 flex items-center gap-1.5 sm:gap-2">
+                <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">Daily Labor</span>
+                <span className="xs:hidden">Daily</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">
+              <div className="text-xl sm:text-2xl md:text-3xl font-bold">
                 {formatCurrency(dailyTotal)}
               </div>
-              <p className="text-sm text-blue-100 mt-2">
+              <p className="text-xs sm:text-sm text-blue-100 mt-1 sm:mt-2">
                 {dailyEntries.length} entries
               </p>
             </CardContent>
           </Card>
 
           <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white border-0 shadow-lg hover:shadow-xl transition-all">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-purple-100 flex items-center gap-2">
-                <Briefcase className="h-4 w-4" />
-                Contract Labor (Khoraki)
+            <CardHeader className="pb-2 sm:pb-3">
+              <CardTitle className="text-xs sm:text-sm font-medium text-purple-100 flex items-center gap-1.5 sm:gap-2">
+                <Briefcase className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">Contract</span>
+                <span className="xs:hidden">Contract</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">
+              <div className="text-xl sm:text-2xl md:text-3xl font-bold">
                 {formatCurrency(contractTotal)}
               </div>
-              <p className="text-sm text-purple-100 mt-2">
+              <p className="text-xs sm:text-sm text-purple-100 mt-1 sm:mt-2">
                 {contractEntries.length} entries
               </p>
             </CardContent>
           </Card>
 
+          <Card className="bg-gradient-to-br from-orange-500 to-orange-600 text-white border-0 shadow-lg hover:shadow-xl transition-all">
+            <CardHeader className="pb-2 sm:pb-3">
+              <CardTitle className="text-xs sm:text-sm font-medium text-orange-100 flex items-center gap-1.5 sm:gap-2">
+                <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">MFS Charges</span>
+                <span className="sm:hidden">MFS</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl sm:text-2xl md:text-3xl font-bold">
+                {formatCurrency(mfsChargesTotal)}
+              </div>
+              <p className="text-xs sm:text-sm text-orange-100 mt-1 sm:mt-2">
+                Your cost
+              </p>
+            </CardContent>
+          </Card>
+
           <Card className="bg-gradient-to-br from-amber-500 to-amber-600 text-white border-0 shadow-lg hover:shadow-xl transition-all">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-amber-100 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  Total Combined
+            <CardHeader className="pb-2 sm:pb-3">
+              <div className="flex items-start justify-between gap-1">
+                <CardTitle className="text-xs sm:text-sm font-medium text-amber-100 flex items-center gap-1.5 sm:gap-2">
+                  <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline">Total Cost</span>
+                  <span className="sm:hidden">Total</span>
                 </CardTitle>
                 <Link
                   href={`/tender/${params.tenderId}/labor/subcontractors`}
-                  className="text-xs text-amber-100 hover:text-white underline underline-offset-2"
+                  className="text-[10px] sm:text-xs text-amber-100 hover:text-white underline underline-offset-2"
                 >
-                  By Subcontractor →
+                  <span className="hidden sm:inline">By Subcontractor →</span>
+                  <span className="sm:hidden">Sub →</span>
                 </Link>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">
-                {formatCurrency(combinedTotal)}
+              <div className="text-xl sm:text-2xl md:text-3xl font-bold">
+                {formatCurrency(totalWithCharges)}
               </div>
-              <p className="text-sm text-amber-100 mt-2">All labor expenses</p>
+              <p className="text-xs sm:text-sm text-amber-100 mt-1 sm:mt-2">
+                <span className="hidden sm:inline">All inclusive</span>
+                <span className="sm:hidden">Inclusive</span>
+              </p>
             </CardContent>
           </Card>
         </div>

@@ -10,15 +10,16 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils/format";
 import { labels } from "@/lib/utils/bangla";
-import { 
-  ArrowLeft, 
-  Users, 
-  Briefcase, 
+import {
+  ArrowLeft,
+  Users,
+  Briefcase,
   Calendar,
   DollarSign,
   AlertCircle,
   CheckCircle,
-  UserPlus
+  UserPlus,
+  CreditCard,
 } from "lucide-react";
 
 type LaborType = "contract" | "daily";
@@ -35,6 +36,7 @@ export default function AddLaborPage({
   const [laborType, setLaborType] = useState<LaborType>("contract");
   const [workTypes, setWorkTypes] = useState<any[]>([]);
   const [subcontractors, setSubcontractors] = useState<any[]>([]);
+  const [staffList, setStaffList] = useState<any[]>([]);
   const [showNewSubForm, setShowNewSubForm] = useState(false);
   const [newSubName, setNewSubName] = useState("");
   const [newSubPhone, setNewSubPhone] = useState("");
@@ -54,11 +56,14 @@ export default function AddLaborPage({
     subcontractorId: "",
     paymentMethod: "cash",
     paymentRef: "",
+    paidThroughStaff: "",
+    paidThroughStaffType: "",
   });
 
   useEffect(() => {
     loadWorkTypes();
     loadSubcontractors();
+    loadStaffList();
     const presetSub = searchParams.get("subcontractorId");
     const presetType = searchParams.get("laborType");
     if (presetSub) {
@@ -90,10 +95,70 @@ export default function AddLaborPage({
     if (data) setSubcontractors(data);
   };
 
+  const loadStaffList = async () => {
+    const supabase = createClient();
+
+    // Load auth users
+    const { data: authAssignments } = await supabase
+      .from("tender_assignments")
+      .select(
+        `
+        user_id,
+        role,
+        profiles (id, full_name)
+      `,
+      )
+      .eq("tender_id", params.tenderId)
+      .not("user_id", "is", null);
+
+    // Load persons (non-auth)
+    const { data: personAssignments } = await supabase
+      .from("tender_assignments")
+      .select(
+        `
+        person_id,
+        role,
+        persons (id, full_name)
+      `,
+      )
+      .eq("tender_id", params.tenderId)
+      .not("person_id", "is", null);
+
+    const staffArr: any[] = [];
+
+    if (authAssignments) {
+      authAssignments.forEach((ta: any) => {
+        if (ta.profiles) {
+          staffArr.push({
+            id: ta.profiles.id,
+            name: ta.profiles.full_name,
+            role: ta.role,
+            type: "user",
+          });
+        }
+      });
+    }
+
+    if (personAssignments) {
+      personAssignments.forEach((ta: any) => {
+        if (ta.persons) {
+          staffArr.push({
+            id: ta.persons.id,
+            name: ta.persons.full_name,
+            role: ta.role,
+            type: "person",
+          });
+        }
+      });
+    }
+
+    setStaffList(staffArr);
+  };
+
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >
+    >,
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -120,8 +185,7 @@ export default function AddLaborPage({
   const baseTotal =
     (parseFloat(formData.khorakiTotal) || 0) +
     (parseFloat(formData.wageTotal) || 0);
-  const fee =
-    formData.paymentMethod === "mfs" ? baseTotal * 0.0185 + 10 : 0;
+  const fee = formData.paymentMethod === "mfs" ? baseTotal * 0.0185 + 10 : 0;
 
   const handleCreateSubcontractor = async () => {
     if (!newSubName.trim()) {
@@ -202,6 +266,65 @@ export default function AddLaborPage({
         setError(insertError.message);
         setLoading(false);
         return;
+      }
+
+      // If payment made through staff, record in their expense ledger
+      if (formData.paidThroughStaff && formData.paidThroughStaffType) {
+        const totalPaid = baseTotal;
+        const laborIdentifier =
+          laborType === "contract"
+            ? formData.crewName
+            : formData.laborName || "Labor";
+
+        const selectedStaff = staffList.find(
+          (s) =>
+            s.id === formData.paidThroughStaff &&
+            s.type === formData.paidThroughStaffType,
+        );
+
+        const isAuthUser = formData.paidThroughStaffType === "user";
+
+        const { error: staffExpenseError } = await supabase
+          .from("person_expenses")
+          .insert({
+            tender_id: params.tenderId,
+            expense_date: formData.entryDate,
+            description: `[LABOR PAYMENT] ${laborIdentifier}${formData.workTypeCustom ? ` - ${formData.workTypeCustom}` : ""}`,
+            amount: totalPaid,
+            notes: `${laborType === "contract" ? "Contract" : "Daily"} labor payment${formData.notes ? ` - ${formData.notes}` : ""}`,
+            created_by: user.id,
+            user_id: isAuthUser ? formData.paidThroughStaff : null,
+            person_id: isAuthUser ? null : formData.paidThroughStaff,
+          });
+
+        if (staffExpenseError) {
+          console.error("Failed to record staff expense:", staffExpenseError);
+          // Don't throw - labor entry was successful
+        }
+      }
+
+      // If MFS payment, add charge to expenses table
+      if (formData.paymentMethod === "mfs" && fee > 0) {
+        const { error: mfsChargeError } = await supabase
+          .from("activity_expenses")
+          .insert({
+            tender_id: params.tenderId,
+            expense_date: formData.entryDate,
+            category: "transport_logistics",
+            subcategory: "mfs_charge",
+            vendor_name: "MFS Transaction Charge",
+            description: `[MFS CHARGE] Labor payment ৳${baseTotal.toFixed(2)}`,
+            amount: fee,
+            payment_method: formData.paymentMethod,
+            payment_ref: formData.paymentRef || null,
+            notes: `Auto-generated: 1.85% + ৳10 MFS charge for labor payment`,
+            created_by: user.id,
+          });
+
+        if (mfsChargeError) {
+          console.error("Failed to record MFS charge:", mfsChargeError);
+          // Don't throw - labor entry was successful
+        }
       }
 
       router.push(`/tender/${params.tenderId}/labor`);
@@ -288,7 +411,10 @@ export default function AddLaborPage({
 
               {/* Date */}
               <div className="space-y-2">
-                <Label htmlFor="entryDate" className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <Label
+                  htmlFor="entryDate"
+                  className="text-sm font-semibold text-gray-900 flex items-center gap-2"
+                >
                   <Calendar className="h-4 w-4 text-gray-500" />
                   {labels.date} *
                 </Label>
@@ -307,7 +433,10 @@ export default function AddLaborPage({
               {/* Contract Fields */}
               {laborType === "contract" && (
                 <div className="space-y-2">
-                  <Label htmlFor="crewName" className="text-sm font-semibold text-gray-900">
+                  <Label
+                    htmlFor="crewName"
+                    className="text-sm font-semibold text-gray-900"
+                  >
                     {labels.crewName} *
                   </Label>
                   <Input
@@ -325,7 +454,10 @@ export default function AddLaborPage({
               {/* Daily Fields */}
               {laborType === "daily" && (
                 <div className="space-y-2">
-                  <Label htmlFor="laborName" className="text-sm font-semibold text-gray-900">
+                  <Label
+                    htmlFor="laborName"
+                    className="text-sm font-semibold text-gray-900"
+                  >
                     {labels.laborName}
                   </Label>
                   <Input
@@ -342,7 +474,10 @@ export default function AddLaborPage({
 
               {/* Work Type */}
               <div className="space-y-2">
-                <Label htmlFor="workTypeId" className="text-sm font-semibold text-gray-900">
+                <Label
+                  htmlFor="workTypeId"
+                  className="text-sm font-semibold text-gray-900"
+                >
                   {labels.workType}
                 </Label>
                 <select
@@ -364,7 +499,10 @@ export default function AddLaborPage({
 
               {/* Headcount */}
               <div className="space-y-2">
-                <Label htmlFor="headcount" className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <Label
+                  htmlFor="headcount"
+                  className="text-sm font-semibold text-gray-900 flex items-center gap-2"
+                >
                   <Users className="h-4 w-4 text-gray-500" />
                   {labels.headcount}
                 </Label>
@@ -383,7 +521,10 @@ export default function AddLaborPage({
               {/* Khoraki */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="khorakiRatePerHead" className="text-sm font-semibold text-gray-900">
+                  <Label
+                    htmlFor="khorakiRatePerHead"
+                    className="text-sm font-semibold text-gray-900"
+                  >
                     {labels.khorakiPerHead}
                   </Label>
                   <Input
@@ -399,7 +540,10 @@ export default function AddLaborPage({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="khorakiTotal" className="text-sm font-semibold text-gray-900">
+                  <Label
+                    htmlFor="khorakiTotal"
+                    className="text-sm font-semibold text-gray-900"
+                  >
                     {labels.khorakiTotal}
                   </Label>
                   <Input
@@ -418,7 +562,10 @@ export default function AddLaborPage({
 
               {/* Wage */}
               <div className="space-y-2">
-                <Label htmlFor="wageTotal" className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <Label
+                  htmlFor="wageTotal"
+                  className="text-sm font-semibold text-gray-900 flex items-center gap-2"
+                >
                   <DollarSign className="h-4 w-4 text-gray-500" />
                   {labels.wageTotal}
                 </Label>
@@ -437,7 +584,10 @@ export default function AddLaborPage({
 
               {/* Subcontractor */}
               <div className="space-y-3">
-                <Label htmlFor="subcontractorId" className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <Label
+                  htmlFor="subcontractorId"
+                  className="text-sm font-semibold text-gray-900 flex items-center gap-2"
+                >
                   <Briefcase className="h-4 w-4 text-gray-500" />
                   Subcontractor / Team
                 </Label>
@@ -469,7 +619,9 @@ export default function AddLaborPage({
                 </div>
                 {showNewSubForm && (
                   <div className="space-y-3 rounded-lg border-2 border-blue-200 p-4 bg-blue-50/50">
-                    <h4 className="font-semibold text-gray-900 text-sm">Add New Subcontractor</h4>
+                    <h4 className="font-semibold text-gray-900 text-sm">
+                      Add New Subcontractor
+                    </h4>
                     <Input
                       placeholder="Name *"
                       value={newSubName}
@@ -516,44 +668,102 @@ export default function AddLaborPage({
               </div>
 
               {/* Payment */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-4">
+                <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-blue-600" />
+                  Payment Details
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="paymentMethod"
+                      className="text-sm font-semibold text-gray-900"
+                    >
+                      Payment Method
+                    </Label>
+                    <select
+                      id="paymentMethod"
+                      name="paymentMethod"
+                      value={formData.paymentMethod}
+                      onChange={handleChange}
+                      className="flex h-11 w-full rounded-lg border-2 border-gray-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none"
+                      disabled={loading}
+                    >
+                      <option value="cash">💵 Cash</option>
+                      <option value="bank">🏦 Bank</option>
+                      <option value="mfs">📱 bKash / MFS</option>
+                      <option value="advance">📝 Advance</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="paymentRef"
+                      className="text-sm font-semibold text-gray-900"
+                    >
+                      Payment Reference
+                    </Label>
+                    <Input
+                      id="paymentRef"
+                      name="paymentRef"
+                      value={formData.paymentRef}
+                      onChange={handleChange}
+                      placeholder="Ref no. (optional)"
+                      disabled={loading}
+                      className="border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    />
+                  </div>
+                </div>
+
+                {/* Paid Through Staff */}
                 <div className="space-y-2">
-                  <Label htmlFor="paymentMethod" className="text-sm font-semibold text-gray-900">
-                    Payment Method
+                  <Label
+                    htmlFor="paidThroughStaff"
+                    className="text-sm font-semibold text-gray-900"
+                  >
+                    Paid Through Staff (Optional)
                   </Label>
                   <select
-                    id="paymentMethod"
-                    name="paymentMethod"
-                    value={formData.paymentMethod}
-                    onChange={handleChange}
+                    id="paidThroughStaff"
+                    value={
+                      formData.paidThroughStaff
+                        ? `${formData.paidThroughStaffType}:${formData.paidThroughStaff}`
+                        : ""
+                    }
+                    onChange={(e) => {
+                      const [type, id] = e.target.value.split(":");
+                      setFormData((prev) => ({
+                        ...prev,
+                        paidThroughStaff: id || "",
+                        paidThroughStaffType: type || "",
+                      }));
+                    }}
                     className="flex h-11 w-full rounded-lg border-2 border-gray-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none"
                     disabled={loading}
                   >
-                    <option value="cash">💵 Cash</option>
-                    <option value="bank">🏦 Bank</option>
-                    <option value="mfs">📱 bKash / MFS</option>
-                    <option value="advance">📝 Advance</option>
+                    <option value="">Direct payment (not through staff)</option>
+                    {staffList.map((staff) => (
+                      <option
+                        key={`${staff.type}:${staff.id}`}
+                        value={`${staff.type}:${staff.id}`}
+                      >
+                        {staff.name} ({staff.role})
+                      </option>
+                    ))}
                   </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="paymentRef" className="text-sm font-semibold text-gray-900">
-                    Payment Reference
-                  </Label>
-                  <Input
-                    id="paymentRef"
-                    name="paymentRef"
-                    value={formData.paymentRef}
-                    onChange={handleChange}
-                    placeholder="Ref no. (optional)"
-                    disabled={loading}
-                    className="border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                  />
+                  <p className="text-xs text-gray-600 mt-1">
+                    Select if this payment was made by a staff member. It will
+                    be recorded in their expense ledger.
+                  </p>
                 </div>
               </div>
 
               {/* Notes */}
               <div className="space-y-2">
-                <Label htmlFor="notes" className="text-sm font-semibold text-gray-900">
+                <Label
+                  htmlFor="notes"
+                  className="text-sm font-semibold text-gray-900"
+                >
                   {labels.notes}
                 </Label>
                 <textarea
@@ -573,22 +783,32 @@ export default function AddLaborPage({
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-5">
                   <div className="flex items-center gap-2 mb-3">
                     <DollarSign className="h-5 w-5 text-blue-600" />
-                    <h4 className="font-semibold text-gray-900">Cost Summary</h4>
+                    <h4 className="font-semibold text-gray-900">
+                      Cost Summary
+                    </h4>
                   </div>
                   <div className="space-y-2">
                     <div className="flex justify-between items-center text-gray-700">
                       <span>Base Amount:</span>
-                      <span className="font-semibold text-lg">{formatCurrency(baseTotal || 0)}</span>
+                      <span className="font-semibold text-lg">
+                        {formatCurrency(baseTotal || 0)}
+                      </span>
                     </div>
                     {fee > 0 && (
                       <div className="flex justify-between items-center text-sm text-gray-600">
                         <span>bKash Fee (1.85% + ৳10):</span>
-                        <span className="font-medium">{formatCurrency(fee)}</span>
+                        <span className="font-medium">
+                          {formatCurrency(fee)}
+                        </span>
                       </div>
                     )}
                     <div className="pt-2 border-t-2 border-blue-300 flex justify-between items-center">
-                      <span className="font-semibold text-gray-900">Total Project Cost:</span>
-                      <span className="font-bold text-2xl text-blue-600">{formatCurrency(baseTotal + fee)}</span>
+                      <span className="font-semibold text-gray-900">
+                        Total Project Cost:
+                      </span>
+                      <span className="font-bold text-2xl text-blue-600">
+                        {formatCurrency(baseTotal + fee)}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -596,9 +816,9 @@ export default function AddLaborPage({
 
               {/* Action Buttons */}
               <div className="flex gap-3 pt-4">
-                <Button 
-                  type="submit" 
-                  disabled={loading} 
+                <Button
+                  type="submit"
+                  disabled={loading}
                   className="flex-1 h-12 text-base font-semibold shadow-md hover:shadow-lg transition-all gap-2"
                 >
                   <CheckCircle className="h-5 w-5" />

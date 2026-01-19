@@ -244,34 +244,43 @@ export default function VendorDetailPage({
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) throw new Error("Not authenticated");
 
-      // Calculate amount with MFS charge if applicable
-      let finalAmount = Number(parseFloat(paymentData.amount).toFixed(2));
-      let paymentNotes = paymentData.notes || "";
+      // Keep original amount (don't include MFS charge in payment)
+      const paymentAmount = Number(parseFloat(paymentData.amount).toFixed(2));
       
-      if (paymentData.paymentMethod === "mfs" && paymentData.mfsCharge) {
-        const percentageCharge = finalAmount * 0.0185; // 1.85% charge
-        const totalCharge = percentageCharge + 10; // + ৳10 fee
-        finalAmount = Number((finalAmount + totalCharge).toFixed(2));
-        
-        if (paymentNotes) {
-          paymentNotes += " (incl. MFS charge)";
-        } else {
-          paymentNotes = "MFS payment with charge included";
-        }
-      }
-
       const { error } = await supabase.from("vendor_payments").insert({
         tender_id: params.tenderId,
         vendor_id: params.vendorId,
         payment_date: paymentData.paymentDate,
-        amount: finalAmount,
+        amount: paymentAmount,
         payment_method: paymentData.paymentMethod,
         reference: paymentData.reference || null,
-        notes: paymentNotes || null,
+        notes: paymentData.notes || null,
         recorded_by: auth.user.id,
       });
 
       if (error) throw error;
+
+      // If MFS charge is included, add it as a separate expense
+      if (paymentData.paymentMethod === "mfs" && paymentData.mfsCharge) {
+        const mfsCharge = paymentAmount * 0.0185 + 10;
+        const { error: chargeError } = await supabase
+          .from("activity_expenses")
+          .insert({
+            tender_id: params.tenderId,
+            expense_date: paymentData.paymentDate,
+            description: `[MFS CHARGE] Vendor payment to ${vendor?.name || 'vendor'} (৳${paymentAmount.toFixed(2)})`,
+            amount: mfsCharge,
+            payment_method: paymentData.paymentMethod,
+            payment_ref: paymentData.reference || null,
+            notes: `Auto-generated: 1.85% + ৳10 MFS charge`,
+            created_by: auth.user.id,
+          });
+
+        if (chargeError) {
+          console.error("Failed to record MFS charge:", chargeError);
+          // Don't throw - payment was successful
+        }
+      }
 
       setShowPaymentForm(false);
       setPaymentData({

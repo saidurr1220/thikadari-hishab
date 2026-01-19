@@ -32,6 +32,17 @@ export default async function SubcontractorLaborPage({
     )
     .eq("tender_id", params.tenderId);
 
+  // Fetch advances given to subcontractors (persons with subcontractor role)
+  const { data: advances } = await supabase
+    .from("person_advances")
+    .select(`
+      amount,
+      payment_method,
+      person_id,
+      persons!person_advances_person_id_fkey (id, full_name)
+    `)
+    .eq("tender_id", params.tenderId);
+
   const summaries = new Map<string, SubSummary>();
 
   entries?.forEach((e) => {
@@ -45,6 +56,27 @@ export default async function SubcontractorLaborPage({
     const current = summaries.get(key)!;
     current.total += base;
     current.entries += 1;
+  });
+
+  // Add advance costs (including MFS charges) to summaries
+  // We'll match by person name = subcontractor name
+  advances?.forEach((adv: any) => {
+    const personName = adv.persons?.full_name;
+    if (!personName) return;
+
+    // Find matching subcontractor by name
+    for (const [key, summary] of summaries.entries()) {
+      if (summary.name.toLowerCase() === personName.toLowerCase()) {
+        const advAmount = Number(adv.amount || 0);
+        summary.total += advAmount;
+        
+        // Add MFS charge if applicable
+        if (adv.payment_method === "mfs") {
+          const mfsCharge = advAmount * 0.0185 + 10;
+          summary.total += mfsCharge;
+        }
+      }
+    }
   });
 
   const list = Array.from(summaries.values()).sort((a, b) =>

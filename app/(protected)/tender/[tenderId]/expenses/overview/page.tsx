@@ -25,6 +25,9 @@ export default async function ExpensesOverviewPage({
     .eq("tender_id", params.tenderId)
     .order("entry_date", { ascending: false });
 
+  // Note: expense_rollup view already filters out [MFS CHARGE] entries from person_expenses
+  // If you're seeing duplicates, run: docs/FIX_MFS_CHARGE_DUPLICATES.sql
+
   // Fetch MFS transactions for linking
   const { data: vendorPayments } = await supabase
     .from("vendor_payments")
@@ -32,19 +35,8 @@ export default async function ExpensesOverviewPage({
     .eq("tender_id", params.tenderId)
     .eq("payment_method", "mfs");
 
-  const { data: personAdvances } = await supabase
-    .from("person_advances")
-    .select(`
-      id,
-      advance_date,
-      amount,
-      person_id,
-      user_id,
-      person:persons!person_advances_person_id_fkey (full_name),
-      user:profiles!person_advances_user_id_fkey (full_name)
-    `)
-    .eq("tender_id", params.tenderId)
-    .eq("payment_method", "mfs");
+  // Note: We're NOT loading person_advances anymore since we now create explicit MFS charge entries
+  // The charge entries in expenses table contain the description with person/vendor name
 
   const total =
     expenses?.reduce((sum, e: any) => sum + Number(e.amount || 0), 0) || 0;
@@ -60,61 +52,55 @@ export default async function ExpensesOverviewPage({
   }, {});
 
   // Group MFS charges by date with their transactions
-  const mfsChargesByDate = expenses
-    ?.filter((e: any) => e.source_type === "mfs_charge")
-    .reduce((acc: any, charge: any) => {
-      const dateKey = charge.entry_date;
-      if (!acc[dateKey]) {
-        acc[dateKey] = {
-          charges: [],
-          totalCharge: 0,
-        };
-      }
-      
-      // Find the source transaction - match by date and ID
-      let sourceTransaction = null;
-      let sourceType = "unknown";
-      let sourceName = "Unknown";
-
-      // Debug: detect what type of IDs we have
-      const cVendorId = charge.vendor_id;
-      const cPersonId = charge.person_id;
-
-      if (cVendorId) {
-        // This is a vendor payment
-        const vendorPayment = vendorPayments?.find(
-          (vp: any) => String(vp.vendor_id) === String(cVendorId)
-        );
-        if (vendorPayment) {
-          sourceTransaction = vendorPayment;
-          sourceType = "vendor";
-          sourceName = (vendorPayment.vendors as any)?.name || "Vendor Payment";
+  const mfsChargesByDate =
+    expenses
+      ?.filter((e: any) => e.source_type === "mfs_charge")
+      .reduce((acc: any, charge: any) => {
+        const dateKey = charge.entry_date;
+        if (!acc[dateKey]) {
+          acc[dateKey] = {
+            charges: [],
+            totalCharge: 0,
+          };
         }
-      } else if (cPersonId) {
-        // This is a person advance
-        const personAdvance = personAdvances?.find(
-          (pa: any) => 
-            String(pa.person_id) === String(cPersonId) || 
-            String(pa.user_id) === String(cPersonId)
-        );
-        if (personAdvance) {
-          sourceTransaction = personAdvance;
-          sourceType = "person";
-          sourceName = (personAdvance.person as any)?.full_name || 
-                      (personAdvance.user as any)?.full_name || 
-                      "Staff/Person";
-        }
-      }
 
-      acc[dateKey].charges.push({
-        ...charge,
-        sourceTransaction,
-        sourceType: sourceType === "unknown" && (cPersonId || charge.person_id) ? "person" : (sourceType === "unknown" && (cVendorId || charge.vendor_id) ? "vendor" : sourceType),
-        sourceName: (sourceName === "Unknown" || !sourceName) ? (cVendorId ? "Vendor Payment" : (cPersonId ? "Staff/Person Advance" : "bKash Entry")) : sourceName,
-      });
-      acc[dateKey].totalCharge += Number(charge.amount || 0);
-      return acc;
-    }, {}) || {};
+        // Extract transaction details from the description field
+        // Format: [MFS CHARGE] Advance to Person Name (৳10000.00)
+        // or: Bkash charge (Vendor)
+        let sourceType = "transaction";
+        let sourceName = charge.description || "MFS Transaction";
+
+        // Parse the description to make it cleaner
+        if (charge.description?.includes("[MFS CHARGE]")) {
+          const cleanDesc = charge.description
+            .replace("[MFS CHARGE]", "")
+            .trim();
+          sourceName = cleanDesc;
+          sourceType = cleanDesc.toLowerCase().includes("vendor")
+            ? "vendor"
+            : "person";
+        } else if (charge.description?.toLowerCase().includes("vendor")) {
+          // Find matching vendor payment
+          const vendorPayment = vendorPayments?.find(
+            (vp: any) => String(vp.vendor_id) === String(charge.vendor_id),
+          );
+          if (vendorPayment) {
+            sourceName = `Vendor: ${(vendorPayment.vendors as any)?.name || "Unknown"}`;
+            sourceType = "vendor";
+          } else {
+            sourceName = charge.description;
+            sourceType = "vendor";
+          }
+        }
+
+        acc[dateKey].charges.push({
+          ...charge,
+          sourceType,
+          sourceName,
+        });
+        acc[dateKey].totalCharge += Number(charge.amount || 0);
+        return acc;
+      }, {}) || {};
 
   const getSourceTypeLabel = (type: string) => {
     const labels: any = {
@@ -238,7 +224,7 @@ export default async function ExpensesOverviewPage({
 
                   expenses.forEach((e: any, idx: number) => {
                     const dateKey = e.entry_date;
-                    
+
                     if (e.source_type === "mfs_charge") {
                       if (!processedMfsDates.has(dateKey)) {
                         processedMfsDates.add(dateKey);
@@ -278,7 +264,9 @@ export default async function ExpensesOverviewPage({
                                     </span>
                                   </div>
                                   <p className="text-sm text-gray-600">
-                                    Click to view {item.data.charges.length} transaction{item.data.charges.length > 1 ? "s" : ""}
+                                    Click to view {item.data.charges.length}{" "}
+                                    transaction
+                                    {item.data.charges.length > 1 ? "s" : ""}
                                   </p>
                                 </div>
                                 <div className="flex items-center gap-3">
@@ -289,26 +277,28 @@ export default async function ExpensesOverviewPage({
                               </div>
                             </summary>
                             <div className="mt-4 ml-4 space-y-3 border-l-2 border-orange-200 pl-4">
-                              {item.data.charges.map((charge: any, cidx: number) => (
-                                <div
-                                  key={cidx}
-                                  className="bg-orange-50/50 rounded-lg p-3 border border-orange-100"
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="flex-1">
-                                      <p className="font-medium text-gray-800">
-                                        {charge.sourceName || `Unknown (${charge.person_id || charge.vendor_id || 'No ID'})`}
-                                      </p>
-                                      <p className="text-xs text-gray-500 mt-1">
-                                        {charge.sourceType === "vendor" ? "Vendor Payment" : "Person Advance"}
+                              {item.data.charges.map(
+                                (charge: any, cidx: number) => (
+                                  <div
+                                    key={cidx}
+                                    className="bg-orange-50/50 rounded-lg p-3 border border-orange-100"
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="flex-1">
+                                        <p className="font-medium text-gray-800">
+                                          {charge.sourceName}
+                                        </p>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                          MFS Transaction Charge (1.85% + ৳10)
+                                        </p>
+                                      </div>
+                                      <p className="font-semibold text-orange-600">
+                                        {formatCurrency(charge.amount)}
                                       </p>
                                     </div>
-                                    <p className="font-semibold text-orange-600">
-                                      {formatCurrency(charge.amount)}
-                                    </p>
                                   </div>
-                                </div>
-                              ))}
+                                ),
+                              )}
                             </div>
                           </details>
                         );
@@ -327,7 +317,7 @@ export default async function ExpensesOverviewPage({
                                   </p>
                                   <span
                                     className={`text-xs px-2 py-1 rounded-full border ${getSourceTypeColor(
-                                      e.source_type
+                                      e.source_type,
                                     )}`}
                                   >
                                     {getSourceTypeLabel(e.source_type)}

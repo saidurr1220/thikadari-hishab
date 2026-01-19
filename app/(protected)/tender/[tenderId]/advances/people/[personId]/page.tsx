@@ -20,6 +20,7 @@ import {
   Receipt,
 } from "lucide-react";
 import EntryActions from "@/components/EntryActions";
+import MFSChargeCalculator from "@/components/MFSChargeCalculator";
 
 type PersonInfo = {
   name: string;
@@ -54,7 +55,13 @@ export default function PersonAdvanceLedgerPage({
 
   const [showAdvanceForm, setShowAdvanceForm] = useState(false);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [showTransferForm, setShowTransferForm] = useState(false);
+  const [showBulkExpenseForm, setShowBulkExpenseForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [includeMfsCharge, setIncludeMfsCharge] = useState(false);
+  const [mfsCharge, setMfsCharge] = useState(0);
+  const [totalWithCharge, setTotalWithCharge] = useState(0);
+  const [allPeople, setAllPeople] = useState<any[]>([]);
 
   const [advanceForm, setAdvanceForm] = useState({
     date: new Date().toISOString().split("T")[0],
@@ -71,6 +78,22 @@ export default function PersonAdvanceLedgerPage({
     description: "",
     notes: "",
   });
+
+  const [transferForm, setTransferForm] = useState({
+    date: new Date().toISOString().split("T")[0],
+    toPersonId: "",
+    toPersonType: "",
+    amount: "",
+    reference: "",
+    notes: "",
+  });
+
+  const [bulkExpenseDate, setBulkExpenseDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const [bulkExpenseItems, setBulkExpenseItems] = useState<
+    Array<{ description: string; amount: string; notes: string }>
+  >([{ description: "", amount: "", notes: "" }]);
 
   const transactions = useMemo(() => {
     const advTxn: Transaction[] = advances.map((a) => ({
@@ -95,7 +118,7 @@ export default function PersonAdvanceLedgerPage({
 
     // Sort by date (oldest first) to calculate running balance
     const sorted = [...advTxn, ...expTxn].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
     );
 
     // Calculate running balance for each transaction
@@ -117,8 +140,14 @@ export default function PersonAdvanceLedgerPage({
   }, [advances, expenses]);
 
   const stats = useMemo(() => {
-    const totalAdvances = advances.reduce((sum, a) => sum + Number(a.amount || 0), 0);
-    const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const totalAdvances = advances.reduce(
+      (sum, a) => sum + Number(a.amount || 0),
+      0,
+    );
+    const totalExpenses = expenses.reduce(
+      (sum, e) => sum + Number(e.amount || 0),
+      0,
+    );
     const balance = totalAdvances - totalExpenses;
     return {
       totalAdvances,
@@ -131,8 +160,66 @@ export default function PersonAdvanceLedgerPage({
 
   useEffect(() => {
     loadAll();
+    loadAllPeople();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const loadAllPeople = async () => {
+    // Load all people/users assigned to this tender (except current person)
+    const { data: authAssignments } = await supabase
+      .from("tender_assignments")
+      .select(
+        `
+        user_id,
+        role,
+        profiles (id, full_name)
+      `,
+      )
+      .eq("tender_id", params.tenderId)
+      .not("user_id", "is", null);
+
+    const { data: personAssignments } = await supabase
+      .from("tender_assignments")
+      .select(
+        `
+        person_id,
+        role,
+        persons (id, full_name)
+      `,
+      )
+      .eq("tender_id", params.tenderId)
+      .not("person_id", "is", null);
+
+    const peopleList: any[] = [];
+
+    if (authAssignments) {
+      authAssignments.forEach((ta: any) => {
+        if (ta.profiles && ta.profiles.id !== params.personId) {
+          peopleList.push({
+            id: ta.profiles.id,
+            name: ta.profiles.full_name,
+            role: ta.role,
+            type: "user",
+          });
+        }
+      });
+    }
+
+    if (personAssignments) {
+      personAssignments.forEach((ta: any) => {
+        if (ta.persons && ta.persons.id !== params.personId) {
+          peopleList.push({
+            id: ta.persons.id,
+            name: ta.persons.full_name,
+            role: ta.role,
+            type: "person",
+          });
+        }
+      });
+    }
+
+    setAllPeople(peopleList);
+  };
 
   const loadAll = async () => {
     setLoading(true);
@@ -193,10 +280,13 @@ export default function PersonAdvanceLedgerPage({
       const userId = auth.user?.id;
       if (!userId) throw new Error("Not authenticated");
 
+      // Person advance with actual amount (not including charge)
+      const actualAmount = parseFloat(advanceForm.amount || "0");
+
       const payload = {
         tender_id: params.tenderId,
         advance_date: advanceForm.date,
-        amount: parseFloat(advanceForm.amount || "0"),
+        amount: actualAmount,
         payment_method: advanceForm.method as any,
         payment_ref: advanceForm.ref || null,
         purpose: advanceForm.purpose || null,
@@ -212,6 +302,28 @@ export default function PersonAdvanceLedgerPage({
 
       if (insertError) throw insertError;
 
+      // If MFS charge is included, add it to activity_expenses (not person_expenses)
+      // This is YOUR cost, not deducted from the person's balance
+      if (advanceForm.method === "mfs" && includeMfsCharge && mfsCharge > 0) {
+        const { error: chargeError } = await supabase
+          .from("activity_expenses")
+          .insert({
+            tender_id: params.tenderId,
+            expense_date: advanceForm.date,
+            description: `[MFS CHARGE] Advance to ${person.name} (৳${actualAmount.toFixed(2)})`,
+            amount: mfsCharge,
+            payment_method: advanceForm.method,
+            payment_ref: advanceForm.ref || null,
+            notes: `Auto-generated: 1.85% + ৳10 MFS charge`,
+            created_by: userId,
+          });
+
+        if (chargeError) {
+          console.error("Failed to record MFS charge:", chargeError);
+          // Don't throw - advance was successful, just log the error
+        }
+      }
+
       setAdvanceForm({
         date: new Date().toISOString().split("T")[0],
         amount: "",
@@ -220,6 +332,9 @@ export default function PersonAdvanceLedgerPage({
         purpose: "",
         notes: "",
       });
+      setIncludeMfsCharge(false);
+      setMfsCharge(0);
+      setTotalWithCharge(0);
       setShowAdvanceForm(false);
       loadAll();
     } catch (err: any) {
@@ -271,6 +386,148 @@ export default function PersonAdvanceLedgerPage({
     }
   };
 
+  const submitTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!person) return;
+
+    setSubmitting(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) throw new Error("Not authenticated");
+
+      const transferAmount = parseFloat(transferForm.amount || "0");
+      if (transferAmount <= 0) throw new Error("Amount must be greater than 0");
+
+      const toPersonIsUser = transferForm.toPersonType === "user";
+      const toPerson = allPeople.find((p) => p.id === transferForm.toPersonId);
+      if (!toPerson) throw new Error("Recipient not found");
+
+      // 1. Deduct from current person (expense entry)
+      const { error: deductError } = await supabase
+        .from("person_expenses")
+        .insert({
+          tender_id: params.tenderId,
+          expense_date: transferForm.date,
+          description: `[INTERNAL TRANSFER] Transfer to ${toPerson.name}`,
+          amount: transferAmount,
+          notes: transferForm.notes || `Money transferred to ${toPerson.name}`,
+          created_by: userId,
+          user_id: person.isUser ? params.personId : null,
+          person_id: person.isUser ? null : params.personId,
+        });
+
+      if (deductError) throw deductError;
+
+      // 2. Add to recipient (advance entry)
+      const { error: addError } = await supabase
+        .from("person_advances")
+        .insert({
+          tender_id: params.tenderId,
+          advance_date: transferForm.date,
+          amount: transferAmount,
+          payment_method: "cash",
+          payment_ref: transferForm.reference || `TRANSFER-${Date.now()}`,
+          purpose: `Transfer from ${person.name}`,
+          notes: `[INTERNAL TRANSFER] ${transferForm.notes || `Money received from ${person.name}`}`,
+          created_by: userId,
+          user_id: toPersonIsUser ? transferForm.toPersonId : null,
+          person_id: toPersonIsUser ? null : transferForm.toPersonId,
+        });
+
+      if (addError) throw addError;
+
+      setTransferForm({
+        date: new Date().toISOString().split("T")[0],
+        toPersonId: "",
+        toPersonType: "",
+        amount: "",
+        reference: "",
+        notes: "",
+      });
+      setShowTransferForm(false);
+      loadAll();
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const submitBulkExpenses = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!person) return;
+
+    // Validate at least one item with description and amount
+    const validItems = bulkExpenseItems.filter(
+      (item) => item.description.trim() && parseFloat(item.amount || "0") > 0,
+    );
+
+    if (validItems.length === 0) {
+      alert("Please add at least one expense with description and amount");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) throw new Error("Not authenticated");
+
+      // Prepare all expense entries
+      const expenseEntries = validItems.map((item) => ({
+        tender_id: params.tenderId,
+        expense_date: bulkExpenseDate,
+        description: item.description.trim(),
+        amount: parseFloat(item.amount),
+        notes: item.notes.trim() || null,
+        created_by: userId,
+        user_id: person.isUser ? params.personId : null,
+        person_id: person.isUser ? null : params.personId,
+      }));
+
+      // Insert all at once
+      const { error: insertError } = await supabase
+        .from("person_expenses")
+        .insert(expenseEntries);
+
+      if (insertError) throw insertError;
+
+      // Reset form
+      setBulkExpenseDate(new Date().toISOString().split("T")[0]);
+      setBulkExpenseItems([{ description: "", amount: "", notes: "" }]);
+      setShowBulkExpenseForm(false);
+      loadAll();
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const addBulkExpenseItem = () => {
+    setBulkExpenseItems([
+      ...bulkExpenseItems,
+      { description: "", amount: "", notes: "" },
+    ]);
+  };
+
+  const removeBulkExpenseItem = (index: number) => {
+    if (bulkExpenseItems.length > 1) {
+      setBulkExpenseItems(bulkExpenseItems.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateBulkExpenseItem = (
+    index: number,
+    field: "description" | "amount" | "notes",
+    value: string,
+  ) => {
+    const updated = [...bulkExpenseItems];
+    updated[index][field] = value;
+    setBulkExpenseItems(updated);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
@@ -316,15 +573,13 @@ export default function PersonAdvanceLedgerPage({
                     {person.name}
                   </h1>
                   {person.role && (
-                    <p className="text-sm text-slate-600 mt-1">
-                      {person.role}
-                    </p>
+                    <p className="text-sm text-slate-600 mt-1">{person.role}</p>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 onClick={() => setShowAdvanceForm(true)}
                 className="gap-2 bg-emerald-600 hover:bg-emerald-700"
@@ -333,12 +588,20 @@ export default function PersonAdvanceLedgerPage({
                 Give Advance
               </Button>
               <Button
-                onClick={() => setShowExpenseForm(true)}
+                onClick={() => setShowBulkExpenseForm(true)}
                 variant="outline"
                 className="gap-2"
               >
                 <Receipt className="h-4 w-4" />
-                Record Expense
+                Record Expenses
+              </Button>
+              <Button
+                onClick={() => setShowTransferForm(true)}
+                variant="outline"
+                className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50"
+              >
+                <ArrowLeft className="h-4 w-4 rotate-180" />
+                Transfer to Staff
               </Button>
             </div>
           </div>
@@ -385,14 +648,18 @@ export default function PersonAdvanceLedgerPage({
               stats.balance > 0
                 ? "from-blue-500 to-blue-600"
                 : stats.balance < 0
-                ? "from-orange-500 to-orange-600"
-                : "from-slate-500 to-slate-600"
+                  ? "from-orange-500 to-orange-600"
+                  : "from-slate-500 to-slate-600"
             } text-white`}
           >
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium opacity-90 flex items-center gap-2">
                 <DollarSign className="h-4 w-4" />
-                {stats.balance > 0 ? "Remaining Balance" : stats.balance < 0 ? "Over Spent" : "Balanced"}
+                {stats.balance > 0
+                  ? "Remaining Balance"
+                  : stats.balance < 0
+                    ? "Over Spent"
+                    : "Balanced"}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -412,7 +679,9 @@ export default function PersonAdvanceLedgerPage({
             <CardContent>
               <div className="text-2xl font-bold">
                 {stats.totalAdvances > 0
-                  ? Math.round((stats.totalExpenses / stats.totalAdvances) * 100)
+                  ? Math.round(
+                      (stats.totalExpenses / stats.totalAdvances) * 100,
+                    )
                   : 0}
                 %
               </div>
@@ -424,7 +693,7 @@ export default function PersonAdvanceLedgerPage({
                       stats.totalAdvances > 0
                         ? Math.min(
                             (stats.totalExpenses / stats.totalAdvances) * 100,
-                            100
+                            100,
                           )
                         : 0
                     }%`,
@@ -469,7 +738,10 @@ export default function PersonAdvanceLedgerPage({
                       placeholder="0.00"
                       value={advanceForm.amount}
                       onChange={(e) =>
-                        setAdvanceForm((p) => ({ ...p, amount: e.target.value }))
+                        setAdvanceForm((p) => ({
+                          ...p,
+                          amount: e.target.value,
+                        }))
                       }
                       required
                       disabled={submitting}
@@ -485,7 +757,10 @@ export default function PersonAdvanceLedgerPage({
                       className="w-full h-10 border rounded-md px-3 text-sm"
                       value={advanceForm.method}
                       onChange={(e) =>
-                        setAdvanceForm((p) => ({ ...p, method: e.target.value }))
+                        setAdvanceForm((p) => ({
+                          ...p,
+                          method: e.target.value,
+                        }))
                       }
                       disabled={submitting}
                     >
@@ -494,6 +769,53 @@ export default function PersonAdvanceLedgerPage({
                       <option value="mfs">Mobile Banking (bKash/Nagad)</option>
                     </select>
                   </div>
+
+                  {advanceForm.method === "mfs" && (
+                    <div className="md:col-span-2">
+                      <div className="space-y-4">
+                        <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
+                          <div className="flex items-start gap-3 mb-2">
+                            <input
+                              type="checkbox"
+                              id="includeMfsCharge"
+                              checked={includeMfsCharge}
+                              onChange={(e) =>
+                                setIncludeMfsCharge(e.target.checked)
+                              }
+                              className="w-4 h-4 mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              disabled={submitting}
+                            />
+                            <div className="flex-1">
+                              <label
+                                htmlFor="includeMfsCharge"
+                                className="cursor-pointer text-sm font-semibold text-gray-900 block"
+                              >
+                                MFS চার্জ অন্তর্ভুক্ত করুন (1.85% + ৳10)
+                              </label>
+                              <p className="text-xs text-gray-600 mt-1">
+                                ব্যক্তি সম্পূর্ণ টাকা পাবেন। MFS চার্জ আলাদাভাবে
+                                আপনার খরচ হিসেবে রেকর্ড হবে।
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {includeMfsCharge && (
+                          <MFSChargeCalculator
+                            amount={advanceForm.amount}
+                            paymentMethod={advanceForm.method}
+                            onChargeCalculated={(charge, total) => {
+                              setMfsCharge(charge);
+                              setTotalWithCharge(total);
+                            }}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="advanceRef">Reference Number</Label>
                     <Input
@@ -592,7 +914,10 @@ export default function PersonAdvanceLedgerPage({
                       placeholder="0.00"
                       value={expenseForm.amount}
                       onChange={(e) =>
-                        setExpenseForm((p) => ({ ...p, amount: e.target.value }))
+                        setExpenseForm((p) => ({
+                          ...p,
+                          amount: e.target.value,
+                        }))
                       }
                       required
                       disabled={submitting}
@@ -650,6 +975,307 @@ export default function PersonAdvanceLedgerPage({
           </Card>
         )}
 
+        {/* Transfer Form */}
+        {showTransferForm && (
+          <Card className="mb-8 shadow-lg border-blue-200">
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 border-b">
+              <CardTitle className="flex items-center gap-2 text-blue-900">
+                <ArrowLeft className="h-5 w-5 rotate-180" />
+                Transfer to Another Staff
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <form onSubmit={submitTransfer} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="transferDate">Date *</Label>
+                    <Input
+                      id="transferDate"
+                      type="date"
+                      value={transferForm.date}
+                      onChange={(e) =>
+                        setTransferForm((p) => ({ ...p, date: e.target.value }))
+                      }
+                      required
+                      disabled={submitting}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="transferAmount">Amount *</Label>
+                    <Input
+                      id="transferAmount"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={transferForm.amount}
+                      onChange={(e) =>
+                        setTransferForm((p) => ({
+                          ...p,
+                          amount: e.target.value,
+                        }))
+                      }
+                      required
+                      disabled={submitting}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="transferTo">Transfer To *</Label>
+                  <select
+                    id="transferTo"
+                    className="w-full h-10 border rounded-md px-3 text-sm"
+                    value={
+                      transferForm.toPersonId
+                        ? `${transferForm.toPersonType}:${transferForm.toPersonId}`
+                        : ""
+                    }
+                    onChange={(e) => {
+                      const [type, id] = e.target.value.split(":");
+                      setTransferForm((p) => ({
+                        ...p,
+                        toPersonId: id || "",
+                        toPersonType: type || "",
+                      }));
+                    }}
+                    required
+                    disabled={submitting}
+                  >
+                    <option value="">Select person...</option>
+                    {allPeople.map((person) => (
+                      <option
+                        key={`${person.type}:${person.id}`}
+                        value={`${person.type}:${person.id}`}
+                      >
+                        {person.name} ({person.role})
+                      </option>
+                    ))}
+                  </select>
+                  {allPeople.length === 0 && (
+                    <p className="text-sm text-amber-600 mt-1">
+                      No other staff members available for transfer
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="transferReference">Reference</Label>
+                  <Input
+                    id="transferReference"
+                    placeholder="Transaction reference (optional)"
+                    value={transferForm.reference}
+                    onChange={(e) =>
+                      setTransferForm((p) => ({
+                        ...p,
+                        reference: e.target.value,
+                      }))
+                    }
+                    disabled={submitting}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="transferNotes">Notes</Label>
+                  <textarea
+                    id="transferNotes"
+                    className="w-full border rounded-md px-3 py-2 text-sm"
+                    rows={2}
+                    placeholder="Reason for transfer..."
+                    value={transferForm.notes}
+                    onChange={(e) =>
+                      setTransferForm((p) => ({ ...p, notes: e.target.value }))
+                    }
+                    disabled={submitting}
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <Button
+                    type="submit"
+                    disabled={submitting || allPeople.length === 0}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    {submitting ? "Processing..." : "Transfer Money"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowTransferForm(false)}
+                    disabled={submitting}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Bulk Expense Form */}
+        {showBulkExpenseForm && (
+          <Card className="mb-8 shadow-lg border-gray-200">
+            <CardHeader className="bg-gradient-to-r from-slate-50 to-slate-100 border-b">
+              <CardTitle className="flex items-center gap-2 text-gray-900">
+                <Receipt className="h-5 w-5" />
+                Record Expenses
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <form onSubmit={submitBulkExpenses} className="space-y-6">
+                <div>
+                  <Label htmlFor="bulkExpenseDate">Date *</Label>
+                  <Input
+                    id="bulkExpenseDate"
+                    type="date"
+                    value={bulkExpenseDate}
+                    onChange={(e) => setBulkExpenseDate(e.target.value)}
+                    required
+                    disabled={submitting}
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold text-gray-900">
+                      Expense Items
+                    </h4>
+                    <Button
+                      type="button"
+                      onClick={addBulkExpenseItem}
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                      disabled={submitting}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Item
+                    </Button>
+                  </div>
+
+                  {bulkExpenseItems.map((item, index) => (
+                    <div
+                      key={index}
+                      className="border-2 border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <h5 className="font-medium text-gray-700">
+                          Item #{index + 1}
+                        </h5>
+                        {bulkExpenseItems.length > 1 && (
+                          <Button
+                            type="button"
+                            onClick={() => removeBulkExpenseItem(index)}
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            disabled={submitting}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor={`desc-${index}`}>Description *</Label>
+                          <Input
+                            id={`desc-${index}`}
+                            placeholder="What was purchased or paid for"
+                            value={item.description}
+                            onChange={(e) =>
+                              updateBulkExpenseItem(
+                                index,
+                                "description",
+                                e.target.value,
+                              )
+                            }
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor={`amount-${index}`}>Amount *</Label>
+                          <Input
+                            id={`amount-${index}`}
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={item.amount}
+                            onChange={(e) =>
+                              updateBulkExpenseItem(
+                                index,
+                                "amount",
+                                e.target.value,
+                              )
+                            }
+                            disabled={submitting}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor={`notes-${index}`}>Notes</Label>
+                        <Input
+                          id={`notes-${index}`}
+                          placeholder="Additional details..."
+                          value={item.notes}
+                          onChange={(e) =>
+                            updateBulkExpenseItem(
+                              index,
+                              "notes",
+                              e.target.value,
+                            )
+                          }
+                          disabled={submitting}
+                        />
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-sm text-blue-900 font-medium">
+                      Total Amount: ৳
+                      {bulkExpenseItems
+                        .reduce(
+                          (sum, item) => sum + (parseFloat(item.amount) || 0),
+                          0,
+                        )
+                        .toFixed(2)}
+                    </p>
+                    <p className="text-xs text-blue-700 mt-1">
+                      {
+                        bulkExpenseItems.filter(
+                          (item) =>
+                            item.description.trim() &&
+                            parseFloat(item.amount || "0") > 0,
+                        ).length
+                      }{" "}
+                      valid expense(s)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <Button
+                    type="submit"
+                    disabled={submitting}
+                    className="bg-gray-900 hover:bg-gray-800"
+                  >
+                    {submitting ? "Processing..." : "Record Expenses"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowBulkExpenseForm(false)}
+                    disabled={submitting}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Transactions Table */}
         <Card className="shadow-lg">
           <CardHeader className="border-b bg-white">
@@ -663,7 +1289,9 @@ export default function PersonAdvanceLedgerPage({
               <div className="text-center py-12 text-slate-500">
                 <Calendar className="h-12 w-12 mx-auto mb-3 opacity-30" />
                 <p>No transactions yet</p>
-                <p className="text-sm mt-1">Start by giving an advance or recording an expense</p>
+                <p className="text-sm mt-1">
+                  Start by giving an advance or recording an expense
+                </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -695,7 +1323,10 @@ export default function PersonAdvanceLedgerPage({
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-200">
                     {transactions.map((txn: any) => (
-                      <tr key={txn.id} className="hover:bg-slate-50 transition-colors">
+                      <tr
+                        key={txn.id}
+                        className="hover:bg-slate-50 transition-colors"
+                      >
                         <td className="px-4 py-3 text-sm text-slate-900 whitespace-nowrap">
                           {formatDate(txn.date)}
                         </td>
@@ -734,27 +1365,39 @@ export default function PersonAdvanceLedgerPage({
                           {txn.payment_method || "-"}
                         </td>
                         <td className="px-4 py-3 text-sm font-semibold text-right text-emerald-600 whitespace-nowrap">
-                          {txn.type === "advance" ? formatCurrency(txn.amount) : "-"}
+                          {txn.type === "advance"
+                            ? formatCurrency(txn.amount)
+                            : "-"}
                         </td>
                         <td className="px-4 py-3 text-sm font-semibold text-right text-red-600 whitespace-nowrap">
-                          {txn.type === "expense" ? formatCurrency(txn.amount) : "-"}
+                          {txn.type === "expense"
+                            ? formatCurrency(txn.amount)
+                            : "-"}
                         </td>
-                        <td className={`px-4 py-3 text-sm font-bold text-right whitespace-nowrap ${
-                          txn.balance > 0
-                            ? "text-blue-600"
-                            : txn.balance < 0
-                            ? "text-orange-600"
-                            : "text-slate-600"
-                        }`}>
+                        <td
+                          className={`px-4 py-3 text-sm font-bold text-right whitespace-nowrap ${
+                            txn.balance > 0
+                              ? "text-blue-600"
+                              : txn.balance < 0
+                                ? "text-orange-600"
+                                : "text-slate-600"
+                          }`}
+                        >
                           {formatCurrency(Math.abs(txn.balance))}
                           {txn.balance < 0 && (
-                            <span className="text-xs text-orange-500 ml-1">Dr</span>
+                            <span className="text-xs text-orange-500 ml-1">
+                              Dr
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <EntryActions
                             entryId={txn.id}
-                            tableName={txn.type === "advance" ? "person_advances" : "person_expenses"}
+                            tableName={
+                              txn.type === "advance"
+                                ? "person_advances"
+                                : "person_expenses"
+                            }
                             editUrl={
                               txn.type === "advance"
                                 ? `/tender/${params.tenderId}/advances/edit/${txn.id}`

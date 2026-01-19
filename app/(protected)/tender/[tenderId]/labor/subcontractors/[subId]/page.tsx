@@ -52,9 +52,40 @@ export default async function SubcontractorDetailPage({
     .eq("subcontractor_id", params.subId)
     .order("entry_date", { ascending: false });
 
+  // Get advances given to this subcontractor by matching person name
+  const { data: advances } = await supabase
+    .from("person_advances")
+    .select(`
+      amount,
+      advance_date,
+      payment_method,
+      person_id,
+      persons!person_advances_person_id_fkey (full_name)
+    `)
+    .eq("tender_id", params.tenderId);
+
+  // Filter advances for this subcontractor by name match
+  const subAdvances = advances?.filter((adv: any) => 
+    adv.persons?.full_name?.toLowerCase() === subcontractor.name.toLowerCase()
+  ) || [];
+
   const calcBase = (entry: any) =>
     Number(entry.khoraki_total || 0) + Number(entry.wage_total || 0);
-  const total = laborEntries?.reduce((s, e) => s + calcBase(e), 0) || 0;
+  const laborTotal = laborEntries?.reduce((s, e) => s + calcBase(e), 0) || 0;
+  
+  // Calculate advances and MFS charges
+  let advancesTotal = 0;
+  let mfsChargesTotal = 0;
+  
+  subAdvances.forEach((adv: any) => {
+    const amount = Number(adv.amount || 0);
+    advancesTotal += amount;
+    if (adv.payment_method === "mfs") {
+      mfsChargesTotal += amount * 0.0185 + 10;
+    }
+  });
+
+  const totalCost = laborTotal + advancesTotal + mfsChargesTotal;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -83,22 +114,72 @@ export default async function SubcontractorDetailPage({
               ) : null}
             </div>
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <Card className="bg-gradient-to-br from-white via-slate-50 to-slate-100 border-slate-200 shadow-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-gray-700">
-                  Total labor
+                <CardTitle className="text-sm font-medium text-blue-700">
+                  Labor Work
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-semibold text-gray-900">
-                  {formatCurrency(total)}
+                <div className="text-2xl font-semibold text-blue-900">
+                  {formatCurrency(laborTotal)}
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-blue-600">
                   {laborEntries?.length || 0} entries
                 </p>
               </CardContent>
             </Card>
+
+            <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-green-700">
+                  Advances Given
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-semibold text-green-900">
+                  {formatCurrency(advancesTotal)}
+                </div>
+                <p className="text-xs text-green-600">
+                  {subAdvances.length} payments
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-orange-700">
+                  MFS Charges
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-semibold text-orange-900">
+                  {formatCurrency(mfsChargesTotal)}
+                </div>
+                <p className="text-xs text-orange-600">
+                  Your cost
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-purple-700">
+                  Total Your Cost
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-semibold text-purple-900">
+                  {formatCurrency(totalCost)}
+                </div>
+                <p className="text-xs text-purple-600">
+                  All inclusive
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="flex justify-end">
             <Button
               asChild
               variant="outline"
